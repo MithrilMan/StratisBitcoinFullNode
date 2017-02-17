@@ -182,7 +182,7 @@ namespace Stratis.Bitcoin.MemoryPool
 		    var ret = await this.AddOrphanTx(from.PeerVersion.Nonce, tx);
 
 		    // DoS prevention: do not allow mapOrphanTransactions to grow unbounded
-		    int nMaxOrphanTx = this.nodeArgs.Mempool.MaxOrphanTx;
+		    int nMaxOrphanTx = this.nodeArgs.MemPool.MaxOrphanTx;
 		    int nEvicted = await this.LimitOrphanTxSize(nMaxOrphanTx);
 		    if (nEvicted > 0)
 			    Logging.Logs.Mempool.LogInformation($"mapOrphan overflow, removed {nEvicted} tx");

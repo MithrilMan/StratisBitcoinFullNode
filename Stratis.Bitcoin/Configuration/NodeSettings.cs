@@ -21,7 +21,7 @@ namespace Stratis.Bitcoin.Configuration {
 
       public ConnectionManagerSettings ConnectionManager { get; set; } = new ConnectionManagerSettings();
 
-      public MempoolSettings Mempool { get; set; } = new MempoolSettings();
+      public MemPoolSettings MemPool { get; set; } = new MemPoolSettings();
 
       public bool Testnet { get; set; }
 
@@ -46,6 +46,10 @@ namespace Stratis.Bitcoin.Configuration {
          string configurationFile = args.Where(a => a.StartsWith("-conf=")).Select(a => a.Substring("-conf=".Length).Replace("\"", "")).FirstOrDefault();
          string datadir = args.Where(a => a.StartsWith("-datadir=")).Select(a => a.Substring("-datadir=".Length).Replace("\"", "")).FirstOrDefault();
          if (datadir != null && configurationFile != null) {
+            if (!Directory.Exists(datadir)) {
+               throw new ConfigurationException($"Data directory '{datadir}' does not exists");
+            }
+
             var isRelativePath = Path.GetFullPath(configurationFile).Length > configurationFile.Length;
             if (isRelativePath) {
                configurationFile = Path.Combine(datadir, configurationFile);
@@ -55,6 +59,12 @@ namespace Stratis.Bitcoin.Configuration {
          CommandLineArguments parsedArguments = new CommandLineArguments();
          parsedArguments.Load(args);
 
+#if DEBUG
+         if (parsedArguments[CommandLineArguments.Option.DebugSettings].HasValue()) {
+            Logs.Configuration.LogInformation($"Arguments passed by command line: {string.Join(" ", args)}");
+         }
+#endif
+
          if (configurationFile != null) {
             if (!File.Exists(configurationFile)) {
                throw new ConfigurationException("Configuration file does not exists");
@@ -62,83 +72,36 @@ namespace Stratis.Bitcoin.Configuration {
 
             var fileArgs = ReadConfigurationFile(configurationFile);
 
+
+#if DEBUG
+            if (parsedArguments[CommandLineArguments.Option.DebugSettings].HasValue()) {
+               Logs.Configuration.LogInformation($"Arguments read from file: {string.Join(System.Environment.NewLine, fileArgs.Select(r => $"{r.Key}{r.Value}"))}");
+            }
+#endif
+
             //merge file options to command line arguments
             foreach (var arg in fileArgs) {
                parsedArguments.AddOptionValue(arg.Key, arg.Value);
             }
          }
 
-         NodeSettings nodeArgs = parsedArguments.GetSettings();
+         NodeSettings settings = parsedArguments.GetSettings();
 
-         if (nodeArgs.ConfigurationFile == null) {
-            nodeArgs.ConfigurationFile = nodeArgs.GetDefaultConfigurationFile();
-         }
-
-         if (nodeArgs.DataDir == null) {
-            var network = nodeArgs.GetNetwork();
-            nodeArgs.DataDir = GetDefaultDataDir("stratisbitcoin", network);
+         //ensure to load the default configuration file if -conf not used
+         if (settings.ConfigurationFile == null) {
+            settings.ConfigurationFile = settings.GetDefaultConfigurationFile(settings.DataDir);
          }
 
-         nodeArgs.Validate();
+         settings.Validate();
 
-         try {
-            nodeArgs.ConnectionManager.Connect.AddRange(config.GetAll("connect")
-               .Select(c => ConvertToEndpoint(c, network.DefaultPort)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid connect parameter");
-         }
-
-         try {
-            nodeArgs.ConnectionManager.AddNode.AddRange(config.GetAll("addnode")
-                  .Select(c => ConvertToEndpoint(c, network.DefaultPort)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid addnode parameter");
-         }
-
-         var port = config.GetOrDefault<int>("port", network.DefaultPort);
-         try {
-            nodeArgs.ConnectionManager.Listen.AddRange(config.GetAll("listen")
-                  .Select(c => new NodeServerEndpoint(ConvertToEndpoint(c, port), false)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid listen parameter");
-         }
-
-         try {
-            nodeArgs.ConnectionManager.Listen.AddRange(config.GetAll("whitebind")
-                  .Select(c => new NodeServerEndpoint(ConvertToEndpoint(c, port), true)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid listen parameter");
-         }
-
-         if (nodeArgs.ConnectionManager.Listen.Count == 0) {
-            nodeArgs.ConnectionManager.Listen.Add(new NodeServerEndpoint(new IPEndPoint(IPAddress.Parse("0.0.0.0"), port), false));
-         }
-
-         var externalIp = config.GetOrDefault<string>("externalip", null);
-         if (externalIp != null) {
-            try {
-               nodeArgs.ConnectionManager.ExternalEndpoint = ConvertToEndpoint(externalIp, port);
-            }
-            catch (FormatException) {
-               throw new ConfigurationException("Invalid externalip parameter");
-            }
-         }
-
-         if (nodeArgs.ConnectionManager.ExternalEndpoint == null) {
-            nodeArgs.ConnectionManager.ExternalEndpoint = new IPEndPoint(IPAddress.Loopback, network.DefaultPort);
-         }
-
-         nodeArgs.Mempool.Load(config);
-
-         var folder = new DataFolder(nodeArgs.DataDir);
-         if (!Directory.Exists(folder.CoinViewPath))
+         var folder = new DataFolder(settings.DataDir);
+         if (!Directory.Exists(folder.CoinViewPath)) {
             Directory.CreateDirectory(folder.CoinViewPath);
-         return nodeArgs;
+         }
+         return settings;
       }
+
+
 
       private void Validate() {
          if (this.Testnet && this.RegTest) {
@@ -147,10 +110,6 @@ namespace Stratis.Bitcoin.Configuration {
 
          Logs.Configuration.LogInformation($"Data directory set to {this.DataDir}");
          Logs.Configuration.LogInformation($"Configuration file set to {this.ConfigurationFile}");
-
-         if (!Directory.Exists(this.DataDir)) {
-            throw new ConfigurationException("Data directory does not exists");
-         }
       }
 
       private static List<KeyValuePair<string, string>> ReadConfigurationFile(string configurationFile) {
@@ -187,165 +146,7 @@ namespace Stratis.Bitcoin.Configuration {
          return detectedOptions;
       }
 
-      [Obsolete]
-      public static NodeSettings GetArgs_Old(string[] args) {
-         NodeSettings nodeArgs = new NodeSettings();
-         nodeArgs.ConfigurationFile = args.Where(a => a.StartsWith("-conf=")).Select(a => a.Substring("-conf=".Length).Replace("\"", "")).FirstOrDefault();
-         nodeArgs.DataDir = args.Where(a => a.StartsWith("-datadir=")).Select(a => a.Substring("-datadir=".Length).Replace("\"", "")).FirstOrDefault();
-         if (nodeArgs.DataDir != null && nodeArgs.ConfigurationFile != null) {
-            var isRelativePath = Path.GetFullPath(nodeArgs.ConfigurationFile).Length > nodeArgs.ConfigurationFile.Length;
-            if (isRelativePath) {
-               nodeArgs.ConfigurationFile = Path.Combine(nodeArgs.DataDir, nodeArgs.ConfigurationFile);
-            }
-         }
-         nodeArgs.Testnet = args.Contains("-testnet", StringComparer.CurrentCultureIgnoreCase);
-         nodeArgs.RegTest = args.Contains("-regtest", StringComparer.CurrentCultureIgnoreCase);
-
-         if (nodeArgs.ConfigurationFile != null) {
-            AssetConfigFileExists(nodeArgs);
-            var configTemp = TextFileConfiguration.Parse(File.ReadAllText(nodeArgs.ConfigurationFile));
-            nodeArgs.Testnet = configTemp.GetOrDefault<bool>("testnet", false);
-            nodeArgs.RegTest = configTemp.GetOrDefault<bool>("regtest", false);
-         }
-
-         if (nodeArgs.Testnet && nodeArgs.RegTest)
-            throw new ConfigurationException("Invalid combination of -regtest and -testnet");
-
-         var network = nodeArgs.GetNetwork();
-         if (nodeArgs.DataDir == null) {
-            nodeArgs.DataDir = GetDefaultDataDir("stratisbitcoin", network);
-         }
-
-         if (nodeArgs.ConfigurationFile == null) {
-            nodeArgs.ConfigurationFile = nodeArgs.GetDefaultConfigurationFile();
-         }
-
-         Logs.Configuration.LogInformation("Data directory set to " + nodeArgs.DataDir);
-         Logs.Configuration.LogInformation("Configuration file set to " + nodeArgs.ConfigurationFile);
-
-         if (!Directory.Exists(nodeArgs.DataDir))
-            throw new ConfigurationException("Data directory does not exists");
-
-         var consoleConfig = new TextFileConfiguration(args);
-         var config = TextFileConfiguration.Parse(File.ReadAllText(nodeArgs.ConfigurationFile));
-         consoleConfig.MergeInto(config);
-
-         nodeArgs.Prune = config.GetOrDefault("prune", 0) != 0;
-         nodeArgs.RequireStandard = config.GetOrDefault("acceptnonstdtxn", !(nodeArgs.RegTest || nodeArgs.Testnet));
-         nodeArgs.MaxTipAge = config.GetOrDefault("maxtipage", DEFAULT_MAX_TIP_AGE);
-
-         nodeArgs.RPC = config.GetOrDefault<bool>("server", false) ? new RPCSettings() : null;
-         if (nodeArgs.RPC != null) {
-            nodeArgs.RPC.RpcUser = config.GetOrDefault<string>("rpcuser", null);
-            nodeArgs.RPC.RpcPassword = config.GetOrDefault<string>("rpcpassword", null);
-            if (nodeArgs.RPC.RpcPassword == null && nodeArgs.RPC.RpcUser != null)
-               throw new ConfigurationException("rpcpassword should be provided");
-            if (nodeArgs.RPC.RpcUser == null && nodeArgs.RPC.RpcPassword != null)
-               throw new ConfigurationException("rpcuser should be provided");
-
-            var defaultPort = config.GetOrDefault<int>("rpcport", network.RPCPort);
-            nodeArgs.RPC.RPCPort = defaultPort;
-            try {
-               nodeArgs.RPC.Bind = config
-                           .GetAll("rpcbind")
-                           .Select(p => ConvertToEndpoint(p, defaultPort))
-                           .ToList();
-            }
-            catch (FormatException) {
-               throw new ConfigurationException("Invalid rpcbind value");
-            }
-
-            try {
-
-               nodeArgs.RPC.AllowIp = config
-                           .GetAll("rpcallowip")
-                           .Select(p => IPAddress.Parse(p))
-                           .ToList();
-            }
-            catch (FormatException) {
-               throw new ConfigurationException("Invalid rpcallowip value");
-            }
-
-            if (nodeArgs.RPC.AllowIp.Count == 0) {
-               nodeArgs.RPC.Bind.Clear();
-               nodeArgs.RPC.Bind.Add(new IPEndPoint(IPAddress.Parse("::1"), defaultPort));
-               nodeArgs.RPC.Bind.Add(new IPEndPoint(IPAddress.Parse("127.0.0.1"), defaultPort));
-               if (config.Contains("rpcbind"))
-                  Logs.Configuration.LogWarning("WARNING: option -rpcbind was ignored because -rpcallowip was not specified, refusing to allow everyone to connect");
-            }
-
-            if (nodeArgs.RPC.Bind.Count == 0) {
-               nodeArgs.RPC.Bind.Add(new IPEndPoint(IPAddress.Parse("::"), defaultPort));
-               nodeArgs.RPC.Bind.Add(new IPEndPoint(IPAddress.Parse("0.0.0.0"), defaultPort));
-            }
-         }
-
-         try {
-            nodeArgs.ConnectionManager.Connect.AddRange(config.GetAll("connect")
-               .Select(c => ConvertToEndpoint(c, network.DefaultPort)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid connect parameter");
-         }
-
-         try {
-            nodeArgs.ConnectionManager.AddNode.AddRange(config.GetAll("addnode")
-                  .Select(c => ConvertToEndpoint(c, network.DefaultPort)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid addnode parameter");
-         }
-
-         var port = config.GetOrDefault<int>("port", network.DefaultPort);
-         try {
-            nodeArgs.ConnectionManager.Listen.AddRange(config.GetAll("listen")
-                  .Select(c => new NodeServerEndpoint(ConvertToEndpoint(c, port), false)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid listen parameter");
-         }
-
-         try {
-            nodeArgs.ConnectionManager.Listen.AddRange(config.GetAll("whitebind")
-                  .Select(c => new NodeServerEndpoint(ConvertToEndpoint(c, port), true)));
-         }
-         catch (FormatException) {
-            throw new ConfigurationException("Invalid listen parameter");
-         }
-
-         if (nodeArgs.ConnectionManager.Listen.Count == 0) {
-            nodeArgs.ConnectionManager.Listen.Add(new NodeServerEndpoint(new IPEndPoint(IPAddress.Parse("0.0.0.0"), port), false));
-         }
-
-         var externalIp = config.GetOrDefault<string>("externalip", null);
-         if (externalIp != null) {
-            try {
-               nodeArgs.ConnectionManager.ExternalEndpoint = ConvertToEndpoint(externalIp, port);
-            }
-            catch (FormatException) {
-               throw new ConfigurationException("Invalid externalip parameter");
-            }
-         }
-
-         if (nodeArgs.ConnectionManager.ExternalEndpoint == null) {
-            nodeArgs.ConnectionManager.ExternalEndpoint = new IPEndPoint(IPAddress.Loopback, network.DefaultPort);
-         }
-
-         nodeArgs.Mempool.Load(config);
-
-         var folder = new DataFolder(nodeArgs.DataDir);
-         if (!Directory.Exists(folder.CoinViewPath))
-            Directory.CreateDirectory(folder.CoinViewPath);
-         return nodeArgs;
-      }
-
-
       #region Helpers
-      private static void AssetConfigFileExists(NodeSettings nodeArgs) {
-         if (!File.Exists(nodeArgs.ConfigurationFile))
-            throw new ConfigurationException("Configuration file does not exists");
-      }
-
       public static IPEndPoint ConvertToEndpoint(string str, int defaultPort) {
          var portOut = defaultPort;
          var hostOut = "";
@@ -368,8 +169,8 @@ namespace Stratis.Bitcoin.Configuration {
          return new IPEndPoint(IPAddress.Parse(str), portOut);
       }
 
-      private string GetDefaultConfigurationFile() {
-         var config = Path.Combine(DataDir, "bitcoin.conf");
+      private string GetDefaultConfigurationFile(string datadir) {
+         var config = Path.Combine(datadir, "bitcoin.conf");
          Logs.Configuration.LogInformation("Configuration file set to " + config);
          if (!File.Exists(config)) {
             Logs.Configuration.LogInformation("Creating configuration file");
@@ -393,35 +194,7 @@ namespace Stratis.Bitcoin.Configuration {
             Network.Main;
       }
 
-      private static string GetDefaultDataDir(string appName, Network network) {
-         string directory = null;
-         var home = Environment.GetEnvironmentVariable("HOME");
-         if (!string.IsNullOrEmpty(home)) {
-            Logs.Configuration.LogInformation("Using HOME environment variable for initializing application data");
-            directory = home;
-            directory = Path.Combine(directory, "." + appName.ToLowerInvariant());
-         }
-         else {
-            var localAppData = Environment.GetEnvironmentVariable("APPDATA");
-            if (!string.IsNullOrEmpty(localAppData)) {
-               Logs.Configuration.LogInformation("Using APPDATA environment variable for initializing application data");
-               directory = localAppData;
-               directory = Path.Combine(directory, appName);
-            }
-            else {
-               throw new DirectoryNotFoundException("Could not find suitable datadir");
-            }
-         }
-         if (!Directory.Exists(directory)) {
-            Directory.CreateDirectory(directory);
-         }
-         directory = Path.Combine(directory, network.Name);
-         if (!Directory.Exists(directory)) {
-            Logs.Configuration.LogInformation("Creating data directory");
-            Directory.CreateDirectory(directory);
-         }
-         return directory;
-      }
+      
       #endregion
    }
 }

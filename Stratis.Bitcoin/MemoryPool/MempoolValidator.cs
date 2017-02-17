@@ -15,10 +15,10 @@ namespace Stratis.Bitcoin.MemoryPool
 {
 	public class MempoolValidator
 	{
-		public const bool DefaultRelaypriority = true;
+		public const bool DefaultRelayPriority = true;
 		public const int DefaultMaxMempoolSize = 300; // Default for -maxmempool, maximum megabytes of mempool memory usage 
 		public const int DefaultMinRelayTxFee = 1000; // Default for -minrelaytxfee, minimum relay fee for transactions 
-		public const int DefaultLimitfreerelay = 0;
+		public const int DefaultLimitFreeRelay = 0;
 		public const int DefaultAncestorLimit = 25; // Default for -limitancestorcount, max number of in-mempool ancestors 
 		public const int DefaultAncestorSizeLimit = 101; // Default for -limitancestorsize, maximum kilobytes of tx + all in-mempool ancestors 
 		public const int DefaultDescendantLimit = 25; // Default for -limitdescendantcount, max number of in-mempool descendants 
@@ -147,7 +147,7 @@ namespace Stratis.Bitcoin.MemoryPool
 				// trim mempool and check if tx was trimmed
 				if (!state.OverrideMempoolLimit)
 				{
-					LimitMempoolSize(this.nodeArgs.Mempool.MaxMempool * 1000000, this.nodeArgs.Mempool.MempoolExpiry * 60 * 60);
+					LimitMempoolSize(this.nodeArgs.MemPool.MaxMempool * 1000000, this.nodeArgs.MemPool.MemPoolExpiry * 60 * 60);
 
 					if (!this.memPool.Exists(context.TransactionHash))
 						state.Fail(MempoolErrors.Full).Throw();
@@ -192,7 +192,7 @@ namespace Stratis.Bitcoin.MemoryPool
 						// unconfirmed ancestors anyway; doing otherwise is hopelessly
 						// insecure.
 						bool replacementOptOut = true;
-						if (this.nodeArgs.Mempool.EnableReplacement)
+						if (this.nodeArgs.MemPool.EnableReplacement)
 						{
 							foreach (var txiner in ptxConflicting.Inputs)
 							{
@@ -340,12 +340,12 @@ namespace Stratis.Bitcoin.MemoryPool
 
 		private void CheckFee(MempoolValidationContext context)
 		{
-			Money mempoolRejectFee = this.memPool.GetMinFee(this.nodeArgs.Mempool.MaxMempool * 1000000).GetFee(context.EntrySize);
+			Money mempoolRejectFee = this.memPool.GetMinFee(this.nodeArgs.MemPool.MaxMempool * 1000000).GetFee(context.EntrySize);
 			if (mempoolRejectFee > 0 && context.ModifiedFees < mempoolRejectFee)
 			{
 				context.State.Fail(MempoolErrors.MinFeeNotMet, $" {context.Fees} < {mempoolRejectFee}").Throw();
 			}
-			else if (nodeArgs.Mempool.RelayPriority && context.ModifiedFees < MinRelayTxFee.GetFee(context.EntrySize) &&
+			else if (nodeArgs.MemPool.RelayPriority && context.ModifiedFees < MinRelayTxFee.GetFee(context.EntrySize) &&
 					 !TxMempool.AllowFree(context.Entry.GetPriority(this.chain.Height + 1)))
 			{
 				// Require that free transactions have sufficient priority to be mined in the next block.
@@ -546,7 +546,7 @@ namespace Stratis.Bitcoin.MemoryPool
 				this.freeLimiter.LastTime = nNow;
 				// -limitfreerelay unit is thousand-bytes-per-minute
 				// At default rate it would take over a month to fill 1GB
-				if (this.freeLimiter.FreeCount + context.EntrySize >= this.nodeArgs.Mempool.LimitFreeRelay * 10 * 1000)
+				if (this.freeLimiter.FreeCount + context.EntrySize >= this.nodeArgs.MemPool.LimitFreeRelay * 10 * 1000)
 					context.State.Fail(new MempoolError(MempoolErrors.RejectInsufficientfee, "rate limited free transaction")).Throw();
 
 				Logging.Logs.Mempool.LogInformation(
@@ -559,10 +559,10 @@ namespace Stratis.Bitcoin.MemoryPool
 		{
 			// Calculate in-mempool ancestors, up to a limit.
 			context.SetAncestors = new TxMempool.SetEntries();
-			var nLimitAncestors = nodeArgs.Mempool.LimitAncestors;
-			var nLimitAncestorSize = nodeArgs.Mempool.LimitAncestorSize * 1000;
-			var nLimitDescendants = nodeArgs.Mempool.LimitDescendants;
-			var nLimitDescendantSize = nodeArgs.Mempool.LimitDescendantSize * 1000;
+			var nLimitAncestors = nodeArgs.MemPool.LimitAncestorCount;
+			var nLimitAncestorSize = nodeArgs.MemPool.LimitAncestorSize * 1000;
+			var nLimitDescendants = nodeArgs.MemPool.LimitDescendantCount;
+			var nLimitDescendantSize = nodeArgs.MemPool.LimitDescendantSize * 1000;
 			string errString;
 			if (!this.memPool.CalculateMemPoolAncestors(context.Entry, context.SetAncestors, nLimitAncestors,
 				nLimitAncestorSize, nLimitDescendants, nLimitDescendantSize, out errString))

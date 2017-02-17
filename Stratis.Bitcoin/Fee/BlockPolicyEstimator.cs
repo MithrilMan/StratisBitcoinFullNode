@@ -295,7 +295,7 @@ namespace Stratis.Bitcoin.Fee
 			answerFoundAtTarget = confTarget - 1;
 
 			// If mempool is limiting txs , return at least the min feerate from the mempool
-			Money minPoolFee = pool.GetMinFee(this.nodeArgs.Mempool.MaxMempool*1000000).FeePerK;
+			Money minPoolFee = pool.GetMinFee(this.nodeArgs.MemPool.MaxMempool*1000000).FeePerK;
 			if (minPoolFee > 0 && minPoolFee.Satoshi > median)
 				return new FeeRate(minPoolFee);
 
@@ -326,7 +326,7 @@ namespace Stratis.Bitcoin.Fee
 
 
 			// If mempool is limiting txs, no priority txs are allowed
-			Money minPoolFee = pool.GetMinFee(this.nodeArgs.Mempool.MaxMempool*1000000).FeePerK;
+			Money minPoolFee = pool.GetMinFee(this.nodeArgs.MemPool.MaxMempool*1000000).FeePerK;
 			if (minPoolFee > 0)
 				return INF_PRIORITY;
 

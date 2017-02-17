@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.CommandLineUtils;
+using System.IO;
 
 namespace Stratis.BitcoinD {
    public class Program {
@@ -17,8 +18,21 @@ namespace Stratis.BitcoinD {
          Logs.Configure(new FuncLoggerFactory(n => new ConsoleLogger(n, (a, b) => true, false)));
          NodeSettings nodeArgs = NodeSettings.GetArgs(args);
 
-         //Console.WriteLine($"you set ConfigurationFile={nodeArgs.ConfigurationFile}");
-         //Console.WriteLine($"you set DataDir={nodeArgs.DataDir}");
+//#if DEBUG
+//         string fileName = System.IO.Path.Combine(nodeArgs.DataDir, "debug.log");
+//         try {
+//            // Attempt to open output file.
+//            FileStream fs = new FileStream(fileName, FileMode.Create);
+//            var writer = new StreamWriter(fs);
+//            // Redirect standard output from the console to the output file.
+//            Console.SetOut(writer);
+//            Console.WriteLine("test");
+//         }
+//         catch (IOException e) {
+//            Console.WriteLine($"Error redirecting output to file {fileName}");
+//            return;
+//         }
+//#endif
 
          FullNode node = new FullNode(nodeArgs);
          CancellationTokenSource cts = new CancellationTokenSource();

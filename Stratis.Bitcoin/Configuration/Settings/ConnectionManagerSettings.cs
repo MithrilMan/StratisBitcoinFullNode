@@ -12,5 +12,15 @@ namespace Stratis.Bitcoin.Configuration {
       public List<NodeServerEndpoint> Listen { get; set; } = new List<NodeServerEndpoint>();
 
       public IPEndPoint ExternalEndpoint { get; internal set; }
+
+      /// <summary>
+      /// specify if the node listen to outbound connections
+      /// </summary>
+      public bool IsListening { get; set; }
+
+      /// <summary>
+      /// Port used to listen
+      /// </summary>
+      public int Port { get; internal set; }
    }
 }
