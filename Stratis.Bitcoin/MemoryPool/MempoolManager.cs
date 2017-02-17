@@ -17,11 +17,11 @@ namespace Stratis.Bitcoin.MemoryPool
 
 		private readonly ConcurrentChain chain;
 		public DateTimeProvider DateTimeProvider { get; }
-		public NodeArgs NodeArgs { get; set; }
+		public NodeSettings NodeArgs { get; set; }
 
 
 		public MempoolManager(SchedulerPairSession mempoolScheduler, TxMempool memPool, ConcurrentChain chain, 
-			MempoolValidator validator, MempoolOrphans orphans, DateTimeProvider dateTimeProvider, NodeArgs nodeArgs)
+			MempoolValidator validator, MempoolOrphans orphans, DateTimeProvider dateTimeProvider, NodeSettings nodeArgs)
 		{
 			this.MempoolScheduler = mempoolScheduler;
 			this.memPool = memPool;

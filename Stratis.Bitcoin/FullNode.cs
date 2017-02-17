@@ -28,8 +28,8 @@ namespace Stratis.Bitcoin
 {
 	public class FullNode : IDisposable
 	{
-		NodeArgs _Args;
-		public NodeArgs Args
+		NodeSettings _Args;
+		public NodeSettings Args
 		{
 			get
 			{
@@ -37,7 +37,7 @@ namespace Stratis.Bitcoin
 			}
 		}
 
-		public FullNode(NodeArgs args)
+		public FullNode(NodeSettings args)
 		{
 			if(args == null)
 				throw new ArgumentNullException("args");
@@ -74,7 +74,7 @@ namespace Stratis.Bitcoin
 			return false;
 		}
 
-		private static uint256 MinimumChainWork(NodeArgs args)
+		private static uint256 MinimumChainWork(NodeSettings args)
 		{
 			// TODO: move this to Network.Consensus
 			if (args.RegTest)

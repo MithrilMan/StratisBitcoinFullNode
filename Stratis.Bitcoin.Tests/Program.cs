@@ -34,7 +34,7 @@ namespace Stratis.Bitcoin.Tests
 		{
 			using(NodeContext ctx = NodeContext.Create(network: Network.Main))
 			{
-				var nodeArgs = new NodeArgs();
+				var nodeArgs = new NodeSettings();
 				nodeArgs.DataDir = ctx.FolderName;
 				nodeArgs.ConnectionManager.Connect.Add(new IPEndPoint(IPAddress.Loopback, ctx.Network.DefaultPort));
 				var fullNode = new FullNode(nodeArgs);
