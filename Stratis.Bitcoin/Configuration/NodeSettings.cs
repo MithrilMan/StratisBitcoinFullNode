@@ -10,6 +10,9 @@ using System.Text;
 using NBitcoin.Protocol;
 using Stratis.Bitcoin.Logging;
 using Stratis.Bitcoin.MemoryPool;
+using Microsoft.Extensions.CommandLineUtils;
+using Newtonsoft.Json;
+using Stratis.Bitcoin.Configuration.JsonConverters;
 
 namespace Stratis.Bitcoin.Configuration {
    public class NodeSettings {
@@ -38,113 +41,52 @@ namespace Stratis.Bitcoin.Configuration {
       public int MaxTipAge { get; set; }
 
       public static NodeSettings Default() {
-         return NodeSettings.GetArgs(new string[0]);
+         return NodeSettings.Load(new string[0]);
       }
 
 
-      public static NodeSettings GetArgs(string[] args) {
-         string configurationFile = args.Where(a => a.StartsWith("-conf=")).Select(a => a.Substring("-conf=".Length).Replace("\"", "")).FirstOrDefault();
-         string datadir = args.Where(a => a.StartsWith("-datadir=")).Select(a => a.Substring("-datadir=".Length).Replace("\"", "")).FirstOrDefault();
-         if (datadir != null && configurationFile != null) {
-            if (!Directory.Exists(datadir)) {
-               throw new ConfigurationException($"Data directory '{datadir}' does not exists");
-            }
+      public static NodeSettings Load(string[] args) {
+         var app = new CommandLineApplication(throwOnUnexpectedArg: true) {
+            Name = "BitcoinD",
+            Description = "BitcoindD stratis implementation",
+            FullName = "BitcoinD full node implementation"
+         };
 
-            var isRelativePath = Path.GetFullPath(configurationFile).Length > configurationFile.Length;
-            if (isRelativePath) {
-               configurationFile = Path.Combine(datadir, configurationFile);
-            }
-         }
+         app.HelpOption("-? | -h | --help");
+         var rootCommand = new Commands.RootCommand(app);
 
-         CommandLineArguments parsedArguments = new CommandLineArguments();
-         parsedArguments.Load(args);
+         try {
+            Logs.Configuration.LogInformation($"Arguments read from command line:{System.Environment.NewLine}{string.Join(", ", args)}");
 
-#if DEBUG
-         if (parsedArguments[CommandLineArguments.Option.DebugSettings].HasValue()) {
-            Logs.Configuration.LogInformation($"Arguments passed by command line: {string.Join(" ", args)}");
-         }
-#endif
-
-         if (configurationFile != null) {
-            if (!File.Exists(configurationFile)) {
-               throw new ConfigurationException("Configuration file does not exists");
-            }
-
-            var fileArgs = ReadConfigurationFile(configurationFile);
+            var result = app.Execute(args);
 
 
-#if DEBUG
-            if (parsedArguments[CommandLineArguments.Option.DebugSettings].HasValue()) {
-               Logs.Configuration.LogInformation($"Arguments read from file: {string.Join(System.Environment.NewLine, fileArgs.Select(r => $"{r.Key}{r.Value}"))}");
-            }
-#endif
-
-            //merge file options to command line arguments
-            foreach (var arg in fileArgs) {
-               parsedArguments.AddOptionValue(arg.Key, arg.Value);
+            //if some error happens, return a null NodeSettings
+            if (result != 0) {
+               return null;
             }
          }
-
-         NodeSettings settings = parsedArguments.GetSettings();
-
-         //ensure to load the default configuration file if -conf not used
-         if (settings.ConfigurationFile == null) {
-            settings.ConfigurationFile = settings.GetDefaultConfigurationFile(settings.DataDir);
+         catch (CommandParsingException ex) {
+            Console.WriteLine(ex.Message);
+            app.ShowHelp();
+            return null;
          }
 
-         settings.Validate();
 
-         var folder = new DataFolder(settings.DataDir);
-         if (!Directory.Exists(folder.CoinViewPath)) {
-            Directory.CreateDirectory(folder.CoinViewPath);
-         }
-         return settings;
+
+         return rootCommand.NodeSettings;
       }
 
 
+      internal string ToJsonString() {
+         JsonSerializerSettings settings = new JsonSerializerSettings();
+         settings.Converters.Add(new IPAddressConverter());
+         settings.Converters.Add(new IPEndPointConverter());
+         settings.Formatting = Formatting.Indented;
 
-      private void Validate() {
-         if (this.Testnet && this.RegTest) {
-            throw new ConfigurationException("Invalid combination of -regtest and -testnet");
-         }
-
-         Logs.Configuration.LogInformation($"Data directory set to {this.DataDir}");
-         Logs.Configuration.LogInformation($"Configuration file set to {this.ConfigurationFile}");
+         return JsonConvert.SerializeObject(this, Newtonsoft.Json.Formatting.Indented, settings);
       }
 
-      private static List<KeyValuePair<string, string>> ReadConfigurationFile(string configurationFile) {
-         List<KeyValuePair<string, string>> detectedOptions = new List<KeyValuePair<string, string>>();
-
-         var lines = File
-        .ReadAllText(configurationFile)
-        .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-         int lineCount = -1;
-         foreach (var l in lines) {
-            lineCount++;
-            var line = l.Trim();
-            if (string.IsNullOrEmpty(line) || line.StartsWith("#")) {
-               continue;
-            }
-            var split = line.Split('=');
-            if (split.Length == 0) {
-               continue;
-            }
-            if (split.Length == 1) {
-               throw new FormatException("Line " + lineCount + ": No value are set");
-            }
-
-            var key = split[0];
-            if (!key.StartsWith("-")) {
-               key = '-' + key;
-            }
-            var value = String.Join("=", split.Skip(1).ToArray());
-
-            detectedOptions.Add(new KeyValuePair<string, string>(key, value));
-         }
-
-         return detectedOptions;
-      }
 
       #region Helpers
       public static IPEndPoint ConvertToEndpoint(string str, int defaultPort) {
@@ -169,32 +111,13 @@ namespace Stratis.Bitcoin.Configuration {
          return new IPEndPoint(IPAddress.Parse(str), portOut);
       }
 
-      private string GetDefaultConfigurationFile(string datadir) {
-         var config = Path.Combine(datadir, "bitcoin.conf");
-         Logs.Configuration.LogInformation("Configuration file set to " + config);
-         if (!File.Exists(config)) {
-            Logs.Configuration.LogInformation("Creating configuration file");
-
-            StringBuilder builder = new StringBuilder();
-            builder.AppendLine("####RPC Settings####");
-            builder.AppendLine("#Activate RPC Server (default: 0)");
-            builder.AppendLine("#server=0");
-            builder.AppendLine("#Where the RPC Server binds (default: 127.0.0.1 and ::1)");
-            builder.AppendLine("#rpcbind=127.0.0.1");
-            builder.AppendLine("#Ip address allowed to connect to RPC (default all: 0.0.0.0 and ::)");
-            builder.AppendLine("#rpcallowedip=127.0.0.1");
-            File.WriteAllText(config, builder.ToString());
-         }
-         return config;
-      }
-
       public Network GetNetwork() {
          return Testnet ? Network.TestNet :
             RegTest ? Network.RegTest :
             Network.Main;
       }
 
-      
+
       #endregion
    }
 }

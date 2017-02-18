@@ -52,7 +52,7 @@ namespace Stratis.Bitcoin.Tests
 
 		public void Start(string dataDir)
 		{
-			var args = NodeSettings.GetArgs(new string[] {"-conf=bitcoin.conf", "-datadir=" + dataDir});
+			var args = NodeSettings.Load(new string[] {"-conf=bitcoin.conf", "-datadir=" + dataDir});
 			FullNode = new FullNode(args);
 			FullNode.Start();
 		}

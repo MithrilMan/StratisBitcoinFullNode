@@ -15,26 +15,41 @@ namespace Stratis.BitcoinD {
 
 
       public static void Main(string[] args) {
-         Logs.Configure(new FuncLoggerFactory(n => new ConsoleLogger(n, (a, b) => true, false)));
-         NodeSettings nodeArgs = NodeSettings.GetArgs(args);
+         NodeSettings nodeSettings;
+         try {
+            nodeSettings = NodeSettings.Load(args);
 
-//#if DEBUG
-//         string fileName = System.IO.Path.Combine(nodeArgs.DataDir, "debug.log");
-//         try {
-//            // Attempt to open output file.
-//            FileStream fs = new FileStream(fileName, FileMode.Create);
-//            var writer = new StreamWriter(fs);
-//            // Redirect standard output from the console to the output file.
-//            Console.SetOut(writer);
-//            Console.WriteLine("test");
-//         }
-//         catch (IOException e) {
-//            Console.WriteLine($"Error redirecting output to file {fileName}");
-//            return;
-//         }
-//#endif
+            //nodeSettings null means commandline help has been issued, no need to proceed
+            if (nodeSettings == null) {
+               return;
+            }
+         }
+         catch (CommandParsingException ex) {
+            ex.Command.ShowHelp();
+            return;
+         }
+         catch (Exception ex) {
+            Console.WriteLine(ex.Message);
+            return;
+         }
 
-         FullNode node = new FullNode(nodeArgs);
+         //#if DEBUG
+         //         string fileName = System.IO.Path.Combine(nodeArgs.DataDir, "debug.log");
+         //         try {
+         //            // Attempt to open output file.
+         //            FileStream fs = new FileStream(fileName, FileMode.Create);
+         //            var writer = new StreamWriter(fs);
+         //            // Redirect standard output from the console to the output file.
+         //            Console.SetOut(writer);
+         //            Console.WriteLine("test");
+         //         }
+         //         catch (IOException e) {
+         //            Console.WriteLine($"Error redirecting output to file {fileName}");
+         //            return;
+         //         }
+         //#endif
+
+         FullNode node = new FullNode(nodeSettings);
          CancellationTokenSource cts = new CancellationTokenSource();
          new Thread(() => {
             Console.WriteLine("Press one key to stop");
