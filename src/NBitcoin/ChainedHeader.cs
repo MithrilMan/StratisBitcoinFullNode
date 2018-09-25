@@ -53,6 +53,37 @@ namespace NBitcoin
     /// <summary>
     /// A BlockHeader chained with all its ancestors.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The block chain is a tree shaped structure starting with the genesis block at the root,
+    /// with each block potentially having multiple candidates to be the next block.
+    /// A ChainedHeader may have multiple previous instance pointing to it, but at most one of them can
+    /// be part of the currently active branch.
+    /// </para>
+    /// <para>
+    /// To speed up lookup of ancestors, this class uses bitcoin core SkipList implementation.
+    /// Standard SkipList, quoting wikipedia, is built in layers.
+    /// The bottom layer is an ordinary ordered linked list.
+    /// Each higher layer acts as an "express lane" for the lists below.
+    /// </para>
+    /// <para>
+    /// For references on standard SkipList implementations, please refer to following links:
+    /// <see href="https://en.wikipedia.org/wiki/Skip_list">Wikipedia.</see>
+    /// <see href="https://www.geeksforgeeks.org/skip-list/">GeeksforGeeks.</see>
+    /// <see href="http://www.vcskicks.com/skiplist.php">Explaination and C# implementation.</see>
+    /// <see href="https://www.codeproject.com/Articles/4897/A-Skip-List-in-C">Nice article on codeproject with C# implementation.</see>
+    /// </para>
+    /// <para>
+    /// Bitcoin implementation instead doesn't uses layers but pre-calculates the Skip item using the <see cref="GetSkipHeight(int)"/> method.
+    /// The reason for such implementation, can be found in these comments found in bitcoin core sources
+    /// <code>
+    /// // Determine which height to jump back to. Any number strictly lower than height is acceptable,
+    /// // but the following expression seems to perform well in simulations (max 110 steps to go back
+    /// // up to 2**18 blocks).
+    /// <see href="https://github.com/bitcoin/bitcoin/blob/cc7258bdfb44c5b5f3498296d8c9e6791655e89f/src/chain.cpp#L77">Reference to Bitcoin core code.</see>
+    /// </code>
+    /// </para>
+    /// </remarks>
     public class ChainedHeader
     {
         /// <summary>Value of 2^256.</summary>
@@ -579,7 +610,7 @@ namespace NBitcoin
 
                 // Only follow skip if Previous.skip isn't better than skip.Previous.
                 int heightSkip = walk.Skip.Height;
-                int heightSkipPrev = this.GetSkipHeight(walk.Height - 1);
+                int heightSkipPrev = walk.Previous.Skip.Height;
                 bool skipAboveTarget = heightSkip > ancestorHeight;
                 bool skipPreviousBetterThanPreviousSkip = !((heightSkipPrev < (heightSkip - 2)) && (heightSkipPrev >= ancestorHeight));
                 if (skipAboveTarget && skipPreviousBetterThanPreviousSkip)
