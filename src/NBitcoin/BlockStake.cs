@@ -341,7 +341,7 @@ namespace NBitcoin
         /// </remarks>
         public Transaction GetCoinstakeOrNewTransaction()
         {
-            return (this.Transactions.Count > 1 && this.Transactions[1].IsCoinStake) ? this.Transactions[1] : new Transaction();
+            return (this.Transactions.Count > 1 && this.Transactions[1].IsCoinStake) ? this.Transactions[1] : Transaction.Empty;
         }
     }
 }
