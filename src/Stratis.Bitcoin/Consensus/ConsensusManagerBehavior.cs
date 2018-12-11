@@ -407,7 +407,7 @@ namespace Stratis.Bitcoin.Consensus
                 return false;
             }
 
-            headers.AsParallel().ForAll(header => header.PrecomputeHash(true, true));
+            Parallel.ForEach(headers, (header) => header.PrecomputeHash(true, true));
 
             // Check headers for consecutiveness.
             for (int i = 1; i < headers.Count; i++)
