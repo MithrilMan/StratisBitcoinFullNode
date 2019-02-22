@@ -179,12 +179,18 @@ namespace Stratis.Bitcoin.IntegrationTests
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerA, 56));
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerB, 55));
 
-                // Connect minerA to minerB, this will cause an InvalidStakeDepth exception to be thrown on minerB.
-                TestHelper.Connect(minerA, minerB);
+                ConsensusRuleException consensusException = null;
+                using (EventAggregator.EventAggregator.PoC.Subscribe<EventAggregator.CoreEvents.ConsensusRuleExceptionThrown>(ev => consensusException = ev.ConsensusRuleException))
+                {
+                    // Connect minerA to minerB, this will cause an InvalidStakeDepth exception to be thrown on minerB.
+                    TestHelper.Connect(minerA, minerB);
 
-                // Wait until minerA has disconnected minerB due to the InvalidStakeDepth exception.
+                    // Wait until minerA has disconnected minerB due to the InvalidStakeDepth exception.
+                    TestHelper.WaitLoop(() => consensusException != null);
+                }
                 TestHelper.WaitLoop(() => !TestHelper.IsNodeConnectedTo(minerA, minerB));
 
+                Assert.True(consensusException.ConsensusError == ConsensusErrors.InvalidStakeDepth);
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerA, 56));
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerB, 55));
             }
@@ -298,7 +304,7 @@ namespace Stratis.Bitcoin.IntegrationTests
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerA, 20));
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerB, 10));
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(syncer, 20));
-                
+
                 // Inject a rule that will fail at block 15 of the new chain.
                 var engine = syncer.FullNode.NodeService<IConsensusRuleEngine>() as ConsensusRuleEngine;
                 syncerNetwork.Consensus.FullValidationRules.Insert(1, new FailValidation(15));
@@ -399,7 +405,7 @@ namespace Stratis.Bitcoin.IntegrationTests
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerA, 11));
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerB, 10));
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(syncer, 11));
-                
+
                 // Syncer jumps chain and reorgs to minerB's longer chain of 12
                 TestHelper.MineBlocks(minerB, 2);
                 Assert.True(TestHelper.IsNodeSyncedAtHeight(minerA, 11));

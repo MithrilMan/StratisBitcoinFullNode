@@ -109,6 +109,7 @@ namespace Stratis.Bitcoin.Connection
                 peerAddress.BanReason = reason;
 
                 this.logger.LogDebug("Peer '{0}' banned for reason '{1}', until {2}.", endpoint, reason, peerAddress.BanUntil.ToString());
+                EventAggregator.EventAggregator.PoC.Publish(new EventAggregator.CoreEvents.PeerIsBanned(endpoint, banTimeSeconds, reason));
             }
         }
 

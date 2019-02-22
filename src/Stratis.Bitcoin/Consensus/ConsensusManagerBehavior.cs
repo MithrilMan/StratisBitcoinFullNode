@@ -460,6 +460,9 @@ namespace Stratis.Bitcoin.Consensus
             }
             catch (ConsensusRuleException exception)
             {
+                //here we publish the event to whoever subscribe to it
+                EventAggregator.EventAggregator.PoC.Publish(new EventAggregator.CoreEvents.ConsensusRuleExceptionThrown(exception));
+
                 this.logger.LogDebug("Peer's header is invalid. Peer will be banned and disconnected. Error: {0}.", exception.ConsensusError);
                 this.peerBanning.BanAndDisconnectPeer(peer.PeerEndPoint, $"Peer presented invalid header, error: {exception.ConsensusError}.");
             }
