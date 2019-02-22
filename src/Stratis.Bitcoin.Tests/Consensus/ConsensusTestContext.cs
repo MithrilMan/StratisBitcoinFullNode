@@ -254,6 +254,24 @@ namespace Stratis.Bitcoin.Tests.Consensus
                         int blockWeight = block.GetSerializedSize();
 
                         int requiredScriptWeight = avgBlockSize.Value - blockWeight;
+                        // adjust the script weight considering if it's size is more or less than one byte
+                        // because of how serialization works, we must ensure we adjust the size to take into consideration the script VarInt
+                        // see NBitcoin.Protocol.VarInt SetValue and ReadWrite methods.
+                        // < 0xFD : stores 1 byte
+                        // size >= 0xFD && <= 0xffff : stores 1 byte + ushort(2 bytes)
+                        // size > 0xffff && <= 0xffffffff : stores 1 byte + uint(4 bytes)
+                        // size > 0xffffffff : stores 1 byte + ulong(8 bytes)
+                        if (requiredScriptWeight > 0xFD)
+                        {
+                            if (requiredScriptWeight < 0xffff)
+                                requiredScriptWeight -= 2;
+                            else if (requiredScriptWeight < 0xffffffff)
+                                requiredScriptWeight -= 4;
+                            else
+                                requiredScriptWeight -= 8;
+
+                            // note: this doesn't work in case decreasing requiredScriptWeight we fall under the previous threshold level
+                        }
                         block.Transactions[0].Outputs.Clear();
                         // generate nonsense script with required bytes to reach required weight.
                         Script script = Script.FromBytesUnsafe(new string('A', requiredScriptWeight).Select(c => (byte)c).ToArray());
