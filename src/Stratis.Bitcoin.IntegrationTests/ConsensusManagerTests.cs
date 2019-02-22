@@ -183,7 +183,7 @@ namespace Stratis.Bitcoin.IntegrationTests
                 using (EventAggregator.EventAggregator.PoC.Subscribe<EventAggregator.CoreEvents.ConsensusRuleExceptionThrown>(ev => consensusException = ev.ConsensusRuleException))
                 {
                     // Connect minerA to minerB, this will cause an InvalidStakeDepth exception to be thrown on minerB.
-                    TestHelper.Connect(minerA, minerB);
+                    TestHelper.ConnectNoCheck(minerA, minerB);
 
                     // Wait until minerA has disconnected minerB due to the InvalidStakeDepth exception.
                     TestHelper.WaitLoop(() => consensusException != null);
