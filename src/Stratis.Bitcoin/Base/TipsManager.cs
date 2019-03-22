@@ -13,18 +13,13 @@ namespace Stratis.Bitcoin.Base
     public interface ITipProvider
     {
         /// <summary>
-        /// Returns the tip known by the component. This is part of the initialization process.
-        /// Allows a <c>null</c> return value in case the component doesn't know its initial tip (genesis tip is used instead).
-        /// </summary>
-        /// <returns>The initial component tip, or <see langword="null"/> if unknown. When the return value is <see langword="null"/> genesis tip is used instead.</returns>
-        ChainedHeader GetTip(ChainedHeader chainTip);
-
-        /// <summary>
         /// returns the key to be used to store the tip information.
         /// This may be useful in case there are multiple component instance that have to store their own tip or in case a component may have multiple tips to store
         /// </summary>
         /// <returns></returns>
         string GetStorageKey();
+
+        ChainedHeader FindFork(ChainedHeader chainTip);
     }
 
     /// <summary>Component that keeps track of common tip between components that can have a tip, during initialization.</summary>
@@ -42,6 +37,7 @@ namespace Stratis.Bitcoin.Base
         /// <param name="highestHeader">Tip of chain of headers.</param>
         void Initialize(ChainedHeader highestHeader);
 
+        void StoreTip(ITipProvider tipProvider, uint256 tipHash);
     }
 
     public class TipsManager : ITipsManager
@@ -103,18 +99,35 @@ namespace Stratis.Bitcoin.Base
 
         private ChainedHeader FindCommonTip(ChainedHeader chainTip)
         {
-            List<ChainedHeader> componentTips = new List<ChainedHeader>();
-
+            // If there aren't component that are providing tips, then return the chainTip
             if (this.tipProviders.Count() == 0)
             {
-                return this.concurrentChain.Genesis;
+                return chainTip;
             }
 
-            ChainedHeader commonTip = null;
+            // get the tip of every known tipProvider
+            List<HashHeightPair> componentsTips = new List<HashHeightPair>();
+
+            // Get all component tips information
+            // If a component doesn't have tip information, we rewind back to genesis
             foreach (ITipProvider component in this.tipProviders)
             {
+                var componentTip = this.keyValueRepository.LoadValue<HashHeightPair>(this.ComputeStorageKey(component));
+                if (componentTip == null)
+                {
+                    this.logger.LogTrace("A component doesn't have a stored tip, rewind to genesis");
+                    return this.concurrentChain.Genesis;
+                }
+
+                componentsTips.Add(componentTip);
+            }
+
+            // Try to find a common tip.
+            ChainedHeader commonTip = null;
+            foreach (HashHeightPair tipHashHeight in componentsTips)
+            {
                 // note: the component needs to find its way to return a known ChainedHeader
-                ChainedHeader componentTip = component.GetTip(chainTip);
+                ChainedHeader componentTip = this.concurrentChain.GetBlock(tipHashHeight.Hash);
 
                 if (componentTip == null)
                 {
@@ -136,9 +149,32 @@ namespace Stratis.Bitcoin.Base
             return commonTip;
         }
 
-        public void StoreTip(string key, int height, uint256 hash)
+        public void StoreTip(ITipProvider tipProvider, uint256 tipHash)
         {
-            throw new NotImplementedException();
+            ChainedHeader tipHeader = this.concurrentChain.GetBlock(tipHash);
+
+            if (tipHeader == null)
+            {
+                this.logger.LogTrace("Cannot find an header with hash {0} passed by the component {1}", tipHash, tipProvider.GetType().Name);
+                throw new ArgumentException(string.Format("Cannot find an header with hash {0}", tipHash));
+            }
+
+            var tip = new HashHeightPair(tipHeader);
+            this.keyValueRepository.SaveValue(this.ComputeStorageKey(tipProvider), tip);
+        }
+
+        /// <summary>
+        /// Compute the storage key to use to store the component tip.
+        /// If GetStorageKey returns null, component type name is used instead.
+        /// </summary>
+        /// <param name="tipProvider">The tip provider.</param>
+        /// <returns></returns>
+        /// <remarks>
+        /// All component tip keys are prefixed with <c>TIP_</c> string.
+        /// </remarks>
+        private string ComputeStorageKey(ITipProvider tipProvider)
+        {
+            return $"TIP_{tipProvider.GetStorageKey() ?? tipProvider.GetType().Name}";
         }
     }
 }
