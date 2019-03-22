@@ -9,202 +9,136 @@ using Stratis.Bitcoin.Utilities;
 
 namespace Stratis.Bitcoin.Base
 {
-    /// <summary>Interface that every tip provider that uses <see cref="ITipsManager"/> should implement.</summary>
+    /// <summary>Interface that every component that persist a tip should implement. This is used to initialize all components to a common tip at startup.</summary>
     public interface ITipProvider
     {
+        /// <summary>
+        /// Returns the tip known by the component. This is part of the initialization process.
+        /// Allows a <c>null</c> return value in case the component doesn't know its initial tip (genesis tip is used instead).
+        /// </summary>
+        /// <returns>The initial component tip, or <see langword="null"/> if unknown. When the return value is <see langword="null"/> genesis tip is used instead.</returns>
+        ChainedHeader GetTip(ChainedHeader chainTip);
+
+        /// <summary>
+        /// returns the key to be used to store the tip information.
+        /// This may be useful in case there are multiple component instance that have to store their own tip or in case a component may have multiple tips to store
+        /// </summary>
+        /// <returns></returns>
+        string GetStorageKey();
     }
 
-    /// <summary>Component that keeps track of highest common tip between components that can have a tip.</summary>
-    public interface ITipsManager : IDisposable
+    /// <summary>Component that keeps track of common tip between components that can have a tip, during initialization.</summary>
+    public interface ITipsManager
     {
+        /// <summary>
+        /// Gets the common tip of known components that implement <see cref="ITipProvider"/>.
+        /// </summary>
+        /// <value>
+        /// The common tip.
+        /// </value>
+        ChainedHeader CommonTip { get; }
+
         /// <summary>Initializes <see cref="ITipsManager"/>.</summary>
         /// <param name="highestHeader">Tip of chain of headers.</param>
         void Initialize(ChainedHeader highestHeader);
 
-        /// <summary>Registers provider of a tip.</summary>
-        /// <remarks>Common tip is selected by finding fork point between tips provided by all registered providers.</remarks>
-        void RegisterTipProvider(ITipProvider provider);
-
-        /// <summary>Provides highest tip commited between all registered components.</summary>
-        ChainedHeader GetLastCommonTip();
-
-        /// <summary>
-        /// Commits persisted tip of a component.
-        /// </summary>
-        /// <remarks>
-        /// Commiting a particular tip would mean that in case node is killed immediately component that
-        /// commited such a tip would be able to recover on startup to it or any tip that is ancestor to tip commited.
-        /// </remarks>
-        void CommitTipPersisted(ITipProvider provider, ChainedHeader tip);
     }
 
     public class TipsManager : ITipsManager
     {
-        private readonly IKeyValueRepository keyValueRepo;
+        private readonly IKeyValueRepository keyValueRepository;
 
-        private const string CommonTipKey = "lastcommontip";
+        /// <summary>
+        /// List of all the registered components that provide their tips.
+        /// </summary>
+        private readonly IEnumerable<ITipProvider> tipProviders;
 
-        /// <summary>Highest commited tips mapped by their providers.</summary>
-        private readonly Dictionary<ITipProvider, ChainedHeader> tipsByProvider;
-
-        /// <summary>Highest tip commited between all registered components.</summary>
-        private ChainedHeader lastCommonTip;
-
-        /// <summary>Protects all access to <see cref="tipsByProvider"/> and write access to <see cref="lastCommonTip"/>.</summary>
-        private readonly object lockObject;
-
-        /// <summary>Triggered when <see cref="lastCommonTip"/> is updated.</summary>
-        private readonly AsyncManualResetEvent newCommonTipSetEvent;
-
-        private Task commonTipPersistingTask;
-
-        private readonly CancellationTokenSource cancellation;
+        private readonly ConcurrentChain concurrentChain;
 
         /// <summary>Instance logger.</summary>
         private readonly ILogger logger;
 
-        public TipsManager(IKeyValueRepository keyValueRepo, ILoggerFactory loggerFactory)
-        {
-            this.keyValueRepo = keyValueRepo;
-            this.tipsByProvider = new Dictionary<ITipProvider, ChainedHeader>();
-            this.lockObject = new object();
-            this.newCommonTipSetEvent = new AsyncManualResetEvent(false);
-            this.cancellation = new CancellationTokenSource();
+        private bool initialized;
+        private ChainedHeader _commonTip;
 
+        /// <inheritdoc />
+        public ChainedHeader CommonTip
+        {
+            get
+            {
+                if (this.initialized)
+                {
+                    return this._commonTip;
+                }
+                else
+                {
+                    throw new Exception($"{nameof(this.CommonTip)} can't be accessed before {nameof(TipsManager)} initialization.");
+                }
+            }
+
+            private set
+            {
+                this._commonTip = value;
+            }
+        }
+
+        public TipsManager(IKeyValueRepository keyValueRepository, IEnumerable<ITipProvider> tipProviders, ConcurrentChain concurrentChain, ILoggerFactory loggerFactory)
+        {
+            this.keyValueRepository = Guard.NotNull(keyValueRepository, nameof(keyValueRepository));
+            this.tipProviders = Guard.NotNull(tipProviders, nameof(tipProviders));
+            this.concurrentChain = Guard.NotNull(concurrentChain, nameof(concurrentChain));
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
+            this.initialized = false;
         }
 
         /// <inheritdoc />
-        public void Initialize(ChainedHeader highestHeader)
+        public void Initialize(ChainedHeader chainTip)
         {
-            if (this.commonTipPersistingTask != null)
-                throw new Exception("Already initialized.");
+            this.CommonTip = this.FindCommonTip(chainTip);
 
-            var commonTipHashHeight = this.keyValueRepo.LoadValue<HashHeightPair>(CommonTipKey);
+            this.initialized = true;
 
-            if (commonTipHashHeight != null)
-                this.lastCommonTip = highestHeader.FindAncestorOrSelf(commonTipHashHeight.Hash, commonTipHashHeight.Height);
-            else
-                // Genesis.
-                this.lastCommonTip = highestHeader.GetAncestor(0);
-
-            this.logger.LogDebug("Tips manager initialized at '{0}'.", this.lastCommonTip);
-
-            this.commonTipPersistingTask = this.PersistCommonTipContinuouslyAsync();
+            this.logger.LogDebug("Tips manager initialized at '{0}'.", this.CommonTip);
         }
 
-        /// <summary>Continuously persists <see cref="lastCommonTip"/> to hard drive.</summary>
-        private async Task PersistCommonTipContinuouslyAsync()
+        private ChainedHeader FindCommonTip(ChainedHeader chainTip)
         {
-            while (!this.cancellation.IsCancellationRequested)
+            List<ChainedHeader> componentTips = new List<ChainedHeader>();
+
+            if (this.tipProviders.Count() == 0)
             {
-                try
-                {
-                    await this.newCommonTipSetEvent.WaitAsync(this.cancellation.Token).ConfigureAwait(false);
-                    this.newCommonTipSetEvent.Reset();
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
-
-                ChainedHeader tipToSave = this.lastCommonTip;
-
-                var hashHeight = new HashHeightPair(tipToSave);
-                this.keyValueRepo.SaveValue(CommonTipKey, hashHeight);
-
-                this.logger.LogDebug("Saved common tip '{0}'.", tipToSave);
-            }
-        }
-
-        /// <inheritdoc />
-        public void RegisterTipProvider(ITipProvider provider)
-        {
-            lock (this.lockObject)
-            {
-                this.tipsByProvider.Add(provider, null);
-            }
-        }
-
-        /// <inheritdoc />
-        public ChainedHeader GetLastCommonTip()
-        {
-            return this.lastCommonTip;
-        }
-
-        /// <inheritdoc />
-        public void CommitTipPersisted(ITipProvider provider, ChainedHeader tip)
-        {
-            lock (this.lockObject)
-            {
-                this.tipsByProvider[provider] = tip;
-
-                // Get lowest tip out of all tips commited.
-                ChainedHeader lowestTip = null;
-                foreach (ChainedHeader chainedHeader in this.tipsByProvider.Values)
-                {
-                    // Do nothing if there is at least 1 component that didn't commit it's tip yet.
-                    if (chainedHeader == null)
-                    {
-                        this.logger.LogTrace("(-)[NOT_ALL_TIPS_COMMITED]");
-                        return;
-                    }
-
-                    if ((lowestTip == null) || (chainedHeader.Height < lowestTip.Height))
-                        lowestTip = chainedHeader;
-                }
-
-                // Last common tip can't be changed because lowest tip is equal to it already.
-                if (this.lastCommonTip == lowestTip)
-                {
-                    this.logger.LogTrace("(-)[ALREADY_PERSISTED]");
-                    return;
-                }
-
-                // Make sure all tips are on the same chain.
-                bool tipsOnSameChain = true;
-                foreach (ChainedHeader chainedHeader in this.tipsByProvider.Values)
-                {
-                    if (chainedHeader.GetAncestor(lowestTip.Height) != lowestTip)
-                    {
-                        tipsOnSameChain = false;
-                        break;
-                    }
-                }
-
-                if (!tipsOnSameChain)
-                {
-                    this.logger.LogDebug("Tips are not on the same chain, finding last common fork between them.");
-                    lowestTip = this.FindCommonFork(this.tipsByProvider.Values.ToList());
-                }
-
-                this.lastCommonTip = lowestTip;
-                this.newCommonTipSetEvent.Set();
-            }
-        }
-
-        /// <summary>Finds common fork between multiple chains.</summary>
-        private ChainedHeader FindCommonFork(List<ChainedHeader> tips)
-        {
-            ChainedHeader fork = null;
-
-            for (int i = 1; i < tips.Count; i++)
-            {
-                fork = tips[i].FindFork(tips[i - 1]);
+                return this.concurrentChain.Genesis;
             }
 
-            if (fork == null && tips.Count == 1)
-                fork = tips[0];
+            ChainedHeader commonTip = null;
+            foreach (ITipProvider component in this.tipProviders)
+            {
+                // note: the component needs to find its way to return a known ChainedHeader
+                ChainedHeader componentTip = component.GetTip(chainTip);
 
-            return fork;
+                if (componentTip == null)
+                {
+                    this.logger.LogError("Tip of component {0} not set", component.GetType().Name);
+                    throw new ArgumentNullException(nameof(componentTip));
+                }
+
+                if (commonTip == null)
+                {
+                    // the first iteration we don't have anything to compare to
+                    commonTip = componentTip;
+                }
+                else
+                {
+                    commonTip = componentTip.FindFork(commonTip);
+                }
+            }
+
+            return commonTip;
         }
 
-        /// <inheritdoc />
-        public void Dispose()
+        public void StoreTip(string key, int height, uint256 hash)
         {
-            this.cancellation.Cancel();
-
-            this.commonTipPersistingTask?.GetAwaiter().GetResult();
+            throw new NotImplementedException();
         }
     }
 }

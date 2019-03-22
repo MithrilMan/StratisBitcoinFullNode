@@ -10,6 +10,7 @@ using DBreeze.DataTypes;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BitcoinCore;
+using Stratis.Bitcoin.Base;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Utilities;
 
@@ -18,7 +19,7 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
     /// <summary>
     /// Persistent implementation of coinview using dBreeze database.
     /// </summary>
-    public class DBreezeCoinView : ICoinView, IDisposable
+    public class DBreezeCoinView : ICoinView, IDisposable, ITipProvider
     {
         /// <summary>Database key under which the block hash of the coin view's current tip is stored.</summary>
         private static readonly byte[] blockHashKey = new byte[0];
@@ -410,6 +411,12 @@ namespace Stratis.Bitcoin.Features.Consensus.CoinViews
         public void Dispose()
         {
             this.dBreeze.Dispose();
+        }
+
+        /// <inheritdoc />
+        public uint256 GetTip()
+        {
+            return this.GetTipHash();
         }
     }
 }

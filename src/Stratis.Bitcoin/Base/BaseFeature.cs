@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -176,16 +178,19 @@ namespace Stratis.Bitcoin.Base
         /// <inheritdoc />
         public override async Task InitializeAsync()
         {
-            // TODO rewrite chain starting logic. Tips manager should be used.
-
+            // Load the chain before checking for components tip.
             await this.StartChainAsync().ConfigureAwait(false);
 
+            // Find the common tips of every components that implements ITipProvider
+            this.tipsManager.Initialize(this.chain.Tip);
+
+            // TODO: remove this when commonTip has been used by every component
             if (this.provenBlockHeaderStore != null)
             {
                 // If we find at this point that proven header store is behind chain we can rewind chain (this will cause a ripple effect and rewind block store and consensus)
                 // This problem should go away once we implement a component to keep all tips up to date
                 // https://github.com/stratisproject/StratisBitcoinFullNode/issues/2503
-                ChainedHeader initializedAt = await this.provenBlockHeaderStore.InitializeAsync(this.chain.Tip);
+                ChainedHeader initializedAt = await this.provenBlockHeaderStore.InitializeAsync(this.tipsManager.CommonTip);
                 this.chain.SetTip(initializedAt);
             }
 
@@ -218,11 +223,11 @@ namespace Stratis.Bitcoin.Base
             // This may be a temporary solution until a better way is found to solve this dependency.
             await this.blockStore.InitializeAsync().ConfigureAwait(false);
 
-            this.consensusRules.Initialize(this.chain.Tip);
+            this.consensusRules.Initialize(this.tipsManager.CommonTip);
 
             this.consensusRules.Register();
 
-            await this.consensusManager.InitializeAsync(this.chain.Tip).ConfigureAwait(false);
+            await this.consensusManager.InitializeAsync(this.tipsManager.CommonTip).ConfigureAwait(false);
 
             this.chainState.ConsensusTip = this.consensusManager.Tip;
         }
