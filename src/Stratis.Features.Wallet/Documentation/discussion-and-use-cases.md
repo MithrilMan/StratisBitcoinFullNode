@@ -196,7 +196,7 @@ Did we want to use only engines that:
 - are the same used by bitcoin core: LevelDb, Barkeley DB (bitcoin core wallet uses Berkeley DB)
 - allow (multiple) indexing
 
-Known Databases:
+###### Known Databases:
 
 | Database Engine                                   | DB Type         | Pros                                 | Cons                                              |
 | ------------------------------------------------- | --------------- | ------------------------------------ | ------------------------------------------------- |
@@ -211,6 +211,12 @@ Known Databases:
 ##### RPC Throughput
 
 We need to test RPC calls throughput , related to StratisX.
+
+
+
+##### Non HD addresses
+
+Should we support import and export of private keys in our wallet implementation?
 
 
 
