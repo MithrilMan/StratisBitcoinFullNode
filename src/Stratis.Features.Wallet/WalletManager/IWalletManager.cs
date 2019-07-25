@@ -9,7 +9,7 @@ namespace Stratis.Features.Wallet
     /// <summary>
     /// Interface for a manager providing operations on wallets.
     /// </summary>
-    public interface IWalletManager
+    public interface IWalletManager: IWalletUseCases
     {
         /// <summary>
         /// Starts this wallet manager.
@@ -35,13 +35,21 @@ namespace Stratis.Features.Wallet
         /// <summary>
         /// Lists all spendable transactions from all accounts in the wallet.
         /// </summary>
-        /// <returns>A collection of spendable outputs</returns>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <param name="confirmations">The confirmations.</param>
+        /// <returns>
+        /// A collection of spendable outputs
+        /// </returns>
         IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWallet(string walletName, int confirmations = 0);
 
         /// <summary>
         /// Lists all spendable transactions from the accounts in the wallet participating in staking.
         /// </summary>
-        /// <returns>A collection of spendable outputs</returns>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <param name="confirmations">The confirmations.</param>
+        /// <returns>
+        /// A collection of spendable outputs
+        /// </returns>
         IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0);
 
         /// <summary>
@@ -57,9 +65,13 @@ namespace Stratis.Features.Wallet
         IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking();
 
         /// <summary>
-        /// Lists all spendable transactions from the account specified in <see cref="WalletAccountReference"/>.
+        /// Lists all spendable transactions from the account specified in <see cref="WalletAccountReference" />.
         /// </summary>
-        /// <returns>A collection of spendable outputs that belong to the given account.</returns>
+        /// <param name="walletAccountReference">The wallet account reference.</param>
+        /// <param name="confirmations">The confirmations.</param>
+        /// <returns>
+        /// A collection of spendable outputs that belong to the given account.
+        /// </returns>
         IEnumerable<UnspentOutputReference> GetSpendableTransactionsInAccount(WalletAccountReference walletAccountReference, int confirmations = 0);
 
         /// <summary>
@@ -71,16 +83,6 @@ namespace Stratis.Features.Wallet
         /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
         /// <returns>A mnemonic defining the wallet's seed used to generate addresses.</returns>
         Mnemonic CreateWallet(string password, string name, string passphrase = null, Mnemonic mnemonic = null);
-
-        /// <summary>
-        /// Signs a string message.
-        /// </summary>
-        /// <param name="password">The user's password.</param>
-        /// <param name="walletName">The name of the wallet.</param>
-        /// <param name="externalAddress">Address to use to sign.</param>
-        /// <param name="message">Message to sign.</param>
-        /// <returns>The generated signature.</returns>
-        string SignMessage(string password, string walletName, string externalAddress, string message);
 
         /// <summary>
         /// Verifies the signed message.
@@ -96,8 +98,8 @@ namespace Stratis.Features.Wallet
         /// </summary>
         /// <param name="password">The user's password.</param>
         /// <param name="name">The name of the wallet.</param>
-        /// <returns>The wallet.</returns>
-        IWallet LoadWallet(string password, string name);
+        /// <returns>Returns <see langword="true"/> if the wallet has been found and loaded, <see langword="false"/> otherwise.</returns>
+        bool LoadWallet(string password, string name);
 
         /// <summary>
         /// Unlocks a wallet for the specified time.
@@ -119,8 +121,8 @@ namespace Stratis.Features.Wallet
         /// <param name="password">The user's password.</param>
         /// <param name="name">The name of the wallet.</param>
         /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
-        /// <param name="passphrase">The passphrase used in the seed.</param>
         /// <param name="creationTime">The date and time this wallet was created.</param>
+        /// <param name="passphrase">The passphrase used in the seed.</param>
         /// <returns>The recovered wallet.</returns>
         IWallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase = null);
 
@@ -131,7 +133,7 @@ namespace Stratis.Features.Wallet
         /// <param name="extPubKey">The extended public key.</param>
         /// <param name="accountIndex">The account number.</param>
         /// <param name="creationTime">The date and time this wallet was created.</param>
-        /// <returns></returns>
+        /// <returns>The recovered wallet.</returns>
         IWallet RecoverWallet(string name, ExtPubKey extPubKey, int accountIndex, DateTime creationTime);
 
         /// <summary>
@@ -222,25 +224,26 @@ namespace Stratis.Features.Wallet
         /// Gets some general information about a wallet.
         /// </summary>
         /// <param name="walletName">The name of the wallet.</param>
-        /// <returns></returns>
+        /// <returns>The required wallet.</returns>
         IWallet GetWallet(string walletName);
 
         /// <summary>
         /// Gets a list of accounts.
         /// </summary>
         /// <param name="walletName">The name of the wallet to look into.</param>
-        /// <returns></returns>
+        /// <returns>The list of wallet accounts.</returns>
         IEnumerable<HdAccount> GetAccounts(string walletName);
 
         /// <summary>
         /// Gets the last block height.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The height of tip of the wallet.</returns>
         int LastBlockHeight();
 
         /// <summary>
         /// Remove all the transactions in the wallet that are above this block height
         /// </summary>
+        /// <param name="fork">The fork.</param>
         void RemoveBlocks(ChainedHeader fork);
 
         /// <summary>
@@ -274,7 +277,7 @@ namespace Stratis.Features.Wallet
         /// <summary>
         /// Gets the extension of the wallet files.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The wallet file extension, if any.</returns>
         string GetWalletFileExtension();
 
         /// <summary>
@@ -339,7 +342,7 @@ namespace Stratis.Features.Wallet
         /// <summary>
         /// Gets the oldest wallet creation time.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The oldest wallet creation date.</returns>
         DateTimeOffset GetOldestWalletCreationTime();
 
         /// <summary>

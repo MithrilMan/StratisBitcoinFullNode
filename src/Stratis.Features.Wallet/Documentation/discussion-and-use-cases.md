@@ -198,13 +198,14 @@ Did we want to use only engines that:
 
 ###### Known Databases:
 
-| Database Engine                                   | DB Type         | Pros                                 | Cons                                              |
-| ------------------------------------------------- | --------------- | ------------------------------------ | ------------------------------------------------- |
-| [DBreeze](https://github.com/hhblaze/DBreeze)     | Key-Value       | Embedded<br />Native<br />ACID       | One Man Band<br />Logical deletes                 |
-| [LiteDb](https://www.litedb.org/)                 | Key-Value       | Embedded<br />Native<br />ACID       | Poor documentation<br />                          |
-| [LevelDb](https://github.com/google/leveldb)      | Key-Value       | Embeddable<br />Used by bitcoin      | Doesn't officially support C#<br />Not ACID       |
-| [FASTER](https://microsoft.github.io/FASTER/)     | Key-Value       | Embeddable<br />Made by MS           | flagged as Research, not sure if production ready |
-| [SQLite](https://db-engines.com/en/system/SQLite) | Relational DBMS | ACID<br />Well Known<br />Embeddable | Not Native                                        |
+| Database Engine                                   | DB Type         | Pros                                 | Cons                                                    |
+| ------------------------------------------------- | --------------- | ------------------------------------ | ------------------------------------------------------- |
+| [DBreeze](https://github.com/hhblaze/DBreeze)     | Key-Value       | Embedded<br />Native<br />ACID       | One Man Band<br />Logical deletes                       |
+| [LiteDb](https://www.litedb.org/)                 | Key-Value       | Embedded<br />Native<br />~~ACID~~   | Poor documentation<br />Not ACID (missing transactions) |
+| [LevelDb](https://github.com/google/leveldb)      | Key-Value       | Embeddable<br />Used by bitcoin      | Doesn't officially support C#<br />Not ACID             |
+| [FASTER](https://microsoft.github.io/FASTER/)     | Key-Value       | Embeddable<br />Made by MS           | flagged as Research, not sure if production ready       |
+| [SQLite](https://db-engines.com/en/system/SQLite) | Relational DBMS | ACID<br />Well Known<br />Embeddable | Not Native                                              |
+| RockDb                                            |                 |                                      |                                                         |
 
 
 

@@ -171,11 +171,17 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.CirrusDnsD", "Stratis.CirrusDnsD\Stratis.CirrusDnsD.csproj", "{62CE1282-A077-4454-A718-7A5BA5756BE9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FederationSetup", "FederationSetup\FederationSetup.csproj", "{C83A089D-7B30-46BB-BBE3-AFBBAFB9A40D}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.CirrusMinerD", "Stratis.CirrusMinerD\Stratis.CirrusMinerD.csproj", "{4548A1D1-C4E2-460C-A06A-FF8A994919D8}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.FederatedSidechains.AdminDashboard", "Stratis.FederatedSidechains.AdminDashboard\Stratis.FederatedSidechains.AdminDashboard.csproj", "{AB1DCAA5-9C86-411D-A730-83A896C0590F}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stratis.Features.Wallet", "Stratis.Features.Wallet\Stratis.Features.Wallet.csproj", "{15EF06DC-88B3-4CD0-A8A7-2C36702A3200}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Snippets", "Snippets", "{AF46B53E-4E91-4288-8C4B-F2B553E05826}"
+	ProjectSection(SolutionItems) = preProject
+		..\Snippets\GuardSnippet.snippet = ..\Snippets\GuardSnippet.snippet
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

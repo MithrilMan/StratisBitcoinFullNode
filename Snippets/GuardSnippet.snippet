@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>Guard.NotNull</Title>
+      <Author>MithrilMan</Author>
+      <Description>Ensure the passed variable isn't null, throw otherwise.</Description>
+      <Shortcut>gnull</Shortcut>
+    </Header>
+    <Snippet>
+      <Imports>
+        <Import>
+          <Namespace>Stratis.Bitcoin.Utilities</Namespace>
+        </Import>
+      </Imports>
+      <Declarations>
+        <Object>
+          <ID>NotNullable</ID>
+          <ToolTip>The variable that must not be null.</ToolTip>
+          <Default>variableToCheck</Default>
+        </Object>
+      </Declarations>
+      <Code Language="CSharp">
+        <![CDATA[Guard.NotNull($NotNullable$, nameof($NotNullable$));]]>
+      </Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>
