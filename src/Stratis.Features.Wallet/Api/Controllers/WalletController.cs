@@ -27,7 +27,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
     public class WalletController : Controller
     {
         public const int MaxHistoryItemsPerAccount = 500;
-
+        private readonly IWalletService walletService;
         private readonly IWalletManager walletManager;
 
         private readonly IWalletTransactionHandler walletTransactionHandler;
@@ -53,6 +53,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
         public WalletController(
             ILoggerFactory loggerFactory,
+            IWalletService walletService,
             IWalletManager walletManager,
             IWalletTransactionHandler walletTransactionHandler,
             IWalletSyncManager walletSyncManager,
@@ -62,16 +63,18 @@ namespace Stratis.Features.Wallet.Api.Controllers
             IBroadcasterManager broadcasterManager,
             IDateTimeProvider dateTimeProvider)
         {
-            this.walletManager = walletManager;
-            this.walletTransactionHandler = walletTransactionHandler;
-            this.walletSyncManager = walletSyncManager;
-            this.connectionManager = connectionManager;
-            this.network = network;
-            this.coinType = (CoinType)network.Consensus.CoinType;
-            this.chainIndexer = chainIndexer;
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
-            this.broadcasterManager = broadcasterManager;
-            this.dateTimeProvider = dateTimeProvider;
+
+            this.walletService = Guard.NotNull(walletService, nameof(walletService));
+            this.walletManager = Guard.NotNull(walletManager, nameof(walletManager));
+            this.walletTransactionHandler = Guard.NotNull(walletTransactionHandler, nameof(walletTransactionHandler));
+            this.walletSyncManager = Guard.NotNull(walletSyncManager, nameof(walletSyncManager));
+            this.connectionManager = Guard.NotNull(connectionManager, nameof(connectionManager));
+            this.network = Guard.NotNull(network, nameof(network));
+            this.coinType = (CoinType)Guard.NotNull(network.Consensus.CoinType, nameof(network.Consensus.CoinType));
+            this.chainIndexer = Guard.NotNull(chainIndexer, nameof(chainIndexer));
+            this.broadcasterManager = Guard.NotNull(broadcasterManager, nameof(broadcasterManager));
+            this.dateTimeProvider = Guard.NotNull(dateTimeProvider, nameof(dateTimeProvider));
         }
 
         /// <summary>
@@ -151,7 +154,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
             {
                 Mnemonic requestMnemonic = string.IsNullOrEmpty(request.Mnemonic) ? null : new Mnemonic(request.Mnemonic);
 
-                Mnemonic mnemonic = this.walletManager.CreateWallet(request.Password, request.Name, request.Passphrase, mnemonic: requestMnemonic);
+                Mnemonic mnemonic = this.walletService.CreateWallet(request.Password, request.Name, request.Passphrase, mnemonic: requestMnemonic);
 
                 // start syncing the wallet from the creation date
                 this.walletSyncManager.SyncFromDate(this.dateTimeProvider.GetUtcNow());

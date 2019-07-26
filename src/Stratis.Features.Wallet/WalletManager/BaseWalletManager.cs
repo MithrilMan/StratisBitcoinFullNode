@@ -30,12 +30,6 @@ namespace Stratis.Features.Wallet
         // <summary>As per RPC method definition this should be the max allowable expiry duration.</summary>
         private const int MaxWalletUnlockDurationInSeconds = 1073741824;
 
-        /// <summary>Quantity of accounts created in a wallet file when a wallet is restored.</summary>
-        private const int WalletRecoveryAccountsCount = 1;
-
-        /// <summary>Quantity of accounts created in a wallet file when a wallet is created.</summary>
-        private const int WalletCreationAccountsCount = 1;
-
         /// <summary>Account numbers greater or equal to this number are reserved for special purpose account indexes.</summary>
         public const int SpecialPurposeAccountIndexesStart = 100_000_000;
 
@@ -198,9 +192,6 @@ namespace Stratis.Features.Wallet
                 this.broadcasterManager.TransactionStateChanged -= this.BroadcasterManager_TransactionStateChanged;
             }
         }
-
-        /// <inheritdoc />
-        public abstract Mnemonic CreateWallet(string password, string name, string passphrase, Mnemonic mnemonic = null);
 
         /// <inheritdoc />
         public bool VerifySignedMessage(string externalAddress, string message, string signature)

@@ -26,7 +26,10 @@ namespace Stratis.Features.Wallet.Repository
             this.HdAccountRepository = Guard.NotNull(hdAccountRepository, nameof(hdAccountRepository));
             this.HdAddressRepository = Guard.NotNull(hdAddressRepository, nameof(hdAddressRepository));
             this.TransactionDataRepository = Guard.NotNull(transactionDataRepository, nameof(transactionDataRepository));
+        }
 
+        public void Begin()
+        {
 
         }
 

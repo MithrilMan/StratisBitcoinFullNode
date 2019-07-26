@@ -9,6 +9,16 @@ namespace Stratis.Features.Wallet
     public interface IWalletService //: IWalletUseCases
     {
         /// <summary>
+        /// Creates a wallet and persist it as a file on the local system.
+        /// </summary>
+        /// <param name="password">The password used to encrypt sensitive info.</param>
+        /// <param name="name">The name of the wallet.</param>
+        /// <param name="passphrase">The passphrase used in the seed.</param>
+        /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
+        /// <returns>A mnemonic defining the wallet's seed used to generate addresses.</returns>
+        Mnemonic CreateWallet(string password, string name, string passphrase = null, Mnemonic mnemonic = null);
+
+        /// <summary>
         /// Signs a string message.
         /// </summary>
         /// <param name="password">The user's password.</param>

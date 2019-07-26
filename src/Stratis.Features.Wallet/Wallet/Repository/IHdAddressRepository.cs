@@ -20,5 +20,7 @@ namespace Stratis.Features.Wallet.Repository
         HdAddress GetAddress(string address);
 
         IEnumerable<Script> GetAllPubKeys(long hdAccountId);
+
+        void Add(IEnumerable<HdAddress> newReceivingAddresses);
     }
 }

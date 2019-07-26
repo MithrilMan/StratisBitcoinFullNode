@@ -4,8 +4,6 @@ namespace Stratis.Features.Wallet
 {
     public class WalletException : Exception
     {
-        public WalletException(string message) : base(message)
-        {
-        }
+        public WalletException(string message) : base(message) { }
     }
 }

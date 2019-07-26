@@ -16,6 +16,22 @@ namespace Stratis.Features.Wallet.Repository
 
         ITransactionDataRepository TransactionDataRepository { get; }
 
+        /// <summary>
+        /// Begins a session, that must be followed either by a <see cref="Commit"/> or a <see cref="Rollback"/>.
+        /// </summary>
+        /// <exception cref="IWalletSessionAlreadyOpen">Thrown if a session is already open.</exception>
+        void Begin();
+
+        /// <summary>
+        /// Commits current session.
+        /// </summary>
+        /// <exception cref="IWalletSessionNotOpenException">Thrown if no session is open.</exception>
         void Save();
+
+        /// <summary>
+        /// Rollbacks current session.
+        /// </summary>
+        /// <exception cref="IWalletSessionNotOpenException">Thrown if no session is open.</exception>
+        void Rollback();
     }
 }

@@ -2,8 +2,6 @@
 {
     public class HdAddressNotFoundException : WalletException
     {
-        public HdAddressNotFoundException(string message = "HdAddress not found in the wallet") : base(message)
-        {
-        }
+        public HdAddressNotFoundException(string message = "HdAddress not found in the wallet.") : base(message) { }
     }
 }
