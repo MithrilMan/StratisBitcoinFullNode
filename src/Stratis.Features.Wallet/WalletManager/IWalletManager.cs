@@ -75,23 +75,6 @@ namespace Stratis.Features.Wallet
         IEnumerable<UnspentOutputReference> GetSpendableTransactionsInAccount(WalletAccountReference walletAccountReference, int confirmations = 0);
 
         /// <summary>
-        /// Verifies the signed message.
-        /// </summary>
-        /// <param name="externalAddress">Address used to sign.</param>
-        /// <param name="message">Message to verify.</param>
-        /// <param name="signature">Message signature.</param>
-        /// <returns>True if the signature is valid, false if it is invalid.</returns>
-        bool VerifySignedMessage(string externalAddress, string message, string signature);
-
-        /// <summary>
-        /// Loads a wallet from a file.
-        /// </summary>
-        /// <param name="password">The user's password.</param>
-        /// <param name="name">The name of the wallet.</param>
-        /// <returns>Returns <see langword="true"/> if the wallet has been found and loaded, <see langword="false"/> otherwise.</returns>
-        bool LoadWallet(string password, string name);
-
-        /// <summary>
         /// Unlocks a wallet for the specified time.
         /// </summary>
         /// <param name="password">The wallet password.</param>

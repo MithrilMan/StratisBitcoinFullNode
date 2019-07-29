@@ -12,8 +12,11 @@ using NBitcoin.BuilderExtensions;
 using Stratis.Bitcoin.AsyncWork;
 using Stratis.Bitcoin.Configuration;
 using Stratis.Bitcoin.Interfaces;
+using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
 using Stratis.Bitcoin.Utilities.Extensions;
+using Stratis.Features.Wallet.Broadcasting;
+using Stratis.Features.Wallet.Events;
 using TracerAttributes;
 
 [assembly: InternalsVisibleTo("Stratis.Bitcoin.Features.Wallet.Tests")]
@@ -54,9 +57,6 @@ namespace Stratis.Features.Wallet
         /// <summary>Factory for creating background async loop tasks.</summary>
         private readonly IAsyncProvider asyncProvider;
 
-        /// <summary>Gets the list of wallets.</summary>
-        public ConcurrentBag<Wallet> Wallets { get; }
-
         /// <summary>The type of coin used in this manager.</summary>
         protected readonly CoinType coinType;
 
@@ -86,6 +86,8 @@ namespace Stratis.Features.Wallet
 
         /// <summary>The settings for the wallet feature.</summary>
         private readonly IScriptAddressReader scriptAddressReader;
+        private readonly ISignals signals;
+        private readonly IWalletService walletService;
 
         /// <summary>The private key cache for unlocked wallets.</summary>
         private readonly MemoryCache privateKeyCache;
@@ -102,6 +104,12 @@ namespace Stratis.Features.Wallet
         internal ScriptToAddressLookup scriptToAddressLookup;
         private Dictionary<OutPoint, TransactionData> inputLookup;
 
+        #region NEW members
+        protected ConcurrentBag<IWallet> loadedWallets;
+        #endregion
+
+
+
         public WalletManager(
             ILoggerFactory loggerFactory,
             Network network,
@@ -113,6 +121,8 @@ namespace Stratis.Features.Wallet
             INodeLifetime nodeLifetime,
             IDateTimeProvider dateTimeProvider,
             IScriptAddressReader scriptAddressReader,
+            ISignals signals,
+            IWalletService walletService,
             IBroadcasterManager broadcasterManager = null) // no need to know about transactions the node will broadcast to.
         {
             Guard.NotNull(loggerFactory, nameof(loggerFactory));
@@ -124,12 +134,13 @@ namespace Stratis.Features.Wallet
             Guard.NotNull(asyncProvider, nameof(asyncProvider));
             Guard.NotNull(nodeLifetime, nameof(nodeLifetime));
             Guard.NotNull(scriptAddressReader, nameof(scriptAddressReader));
+            Guard.NotNull(signals, nameof(signals));
+            Guard.NotNull(walletService, nameof(walletService));
 
             this.walletSettings = walletSettings;
             this.lockObject = new object();
 
             this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
-            this.Wallets = new ConcurrentBag<Wallet>();
 
             this.network = network;
             this.coinType = (CoinType)network.Consensus.CoinType;
@@ -139,6 +150,8 @@ namespace Stratis.Features.Wallet
             this.fileStorage = new FileStorage<Wallet>(dataFolder.WalletPath);
             this.broadcasterManager = broadcasterManager;
             this.scriptAddressReader = scriptAddressReader;
+            this.signals = signals;
+            this.walletService = walletService;
             this.dateTimeProvider = dateTimeProvider;
 
             // register events
@@ -152,6 +165,15 @@ namespace Stratis.Features.Wallet
             this.inputLookup = new Dictionary<OutPoint, TransactionData>();
 
             this.privateKeyCache = new MemoryCache(new MemoryCacheOptions() { ExpirationScanFrequency = new TimeSpan(0, 1, 0) });
+
+
+            this.loadedWallets = new ConcurrentBag<IWallet>();
+            this.subscribeToEvents();
+        }
+
+        private void subscribeToEvents()
+        {
+            this.signals.Subscribe<Events.WalletLoaded>(OnWalletLoaded);
         }
 
         /// <summary>
@@ -195,6 +217,39 @@ namespace Stratis.Features.Wallet
 
         public void Start()
         {
+            this.LoadWallets();
+
+
+
+            // Load data in memory for faster lookups.
+            this.LoadKeysLookupLock();
+
+            // Find the last chain block received by the wallet manager.
+            HashHeightPair hashHeightPair = this.LastReceivedBlockInfo();
+            this.WalletTipHash = hashHeightPair.Hash;
+            this.WalletTipHeight = hashHeightPair.Height;
+
+            // Save the wallets file every 5 minutes to help against crashes.
+            this.asyncLoop = this.asyncProvider.CreateAndRunAsyncLoop("Wallet persist job", token =>
+            {
+                this.SaveWallets();
+                this.logger.LogInformation("Wallets saved to file at {0}.", this.dateTimeProvider.GetUtcNow());
+
+                this.logger.LogTrace("(-)[IN_ASYNC_LOOP]");
+                return Task.CompletedTask;
+            },
+            this.nodeLifetime.ApplicationStopping,
+            repeatEvery: TimeSpan.FromMinutes(WalletSavetimeIntervalInMinutes),
+            startAfter: TimeSpan.FromMinutes(WalletSavetimeIntervalInMinutes));
+        }
+
+        /// <summary>
+        /// Loads all the available wallets.
+        /// </summary>
+        /// <returns></returns>
+        private void LoadWallets()
+        {
+            this.walletService.LoadWallets();
             // Find wallets and load them in memory.
             IEnumerable<Wallet> wallets = this.fileStorage.LoadByFileExtension(WalletFileExtension);
 
@@ -223,27 +278,6 @@ namespace Stratis.Features.Wallet
                     this.UnlockWallet(this.walletSettings.DefaultWalletPassword, this.walletSettings.DefaultWalletName, MaxWalletUnlockDurationInSeconds);
                 }
             }
-
-            // Load data in memory for faster lookups.
-            this.LoadKeysLookupLock();
-
-            // Find the last chain block received by the wallet manager.
-            HashHeightPair hashHeightPair = this.LastReceivedBlockInfo();
-            this.WalletTipHash = hashHeightPair.Hash;
-            this.WalletTipHeight= hashHeightPair.Height;
-
-            // Save the wallets file every 5 minutes to help against crashes.
-            this.asyncLoop = this.asyncProvider.CreateAndRunAsyncLoop("Wallet persist job", token =>
-            {
-                this.SaveWallets();
-                this.logger.LogInformation("Wallets saved to file at {0}.", this.dateTimeProvider.GetUtcNow());
-
-                this.logger.LogTrace("(-)[IN_ASYNC_LOOP]");
-                return Task.CompletedTask;
-            },
-            this.nodeLifetime.ApplicationStopping,
-            repeatEvery: TimeSpan.FromMinutes(WalletSavetimeIntervalInMinutes),
-            startAfter: TimeSpan.FromMinutes(WalletSavetimeIntervalInMinutes));
         }
 
         /// <inheritdoc />
@@ -1840,5 +1874,23 @@ namespace Stratis.Features.Wallet
         {
             return Wallet.SpecialPurposeAccountIndexesStart;
         }
+
+        #region ISignals event handlers
+        /// <summary>
+        /// Called when [wallet loaded].
+        /// </summary>
+        /// <param name="event">The event.</param>
+        /// <exception cref="NotImplementedException"></exception>
+        protected virtual void OnWalletLoaded(WalletLoaded @event)
+        {
+            if (this.Wallets.Any(w => w.Name == @event.Wallet.Name))
+            {
+                this.logger.LogTrace("(-)[NOT_FOUND]");
+                return;
+            }
+
+            this.loadedWallets.Add(@event.Wallet);
+        }
+        #endregion
     }
 }

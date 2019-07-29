@@ -193,7 +193,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
             try
             {
-                string signature = this.walletManager.SignMessage(request.Password, request.WalletName, request.ExternalAddress, request.Message);
+                string signature = this.walletService.SignMessage(request.Password, request.WalletName, request.ExternalAddress, request.Message);
                 return this.Json(signature);
             }
             catch (Exception e)
@@ -222,7 +222,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
             try
             {
-                bool result = this.walletManager.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
+                bool result = this.walletService.VerifySignedMessage(request.ExternalAddress, request.Message, request.Signature);
                 return this.Json(result.ToString());
             }
             catch (Exception e)
@@ -250,7 +250,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
             try
             {
-                IWallet wallet = this.walletManager.LoadWallet(request.Password, request.Name);
+                _ = this.walletService.LoadWallet(request.Password, request.Name);
                 return this.Ok();
             }
             catch (FileNotFoundException e)

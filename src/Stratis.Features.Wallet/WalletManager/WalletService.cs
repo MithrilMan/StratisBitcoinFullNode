@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Stratis.Bitcoin.Signals;
@@ -172,6 +174,80 @@ namespace Stratis.Features.Wallet
 
             // Sign the message.
             return privateKey.SignMessage(message);
+        }
+
+        /// <inheritdoc />
+        public bool VerifySignedMessage(string externalAddress, string message, string signature)
+        {
+            // TODO: this method doesn't check if the external address belongs to one of our wallet, shouldn't it check it?
+            Guard.NotEmpty(message, nameof(message));
+            Guard.NotEmpty(externalAddress, nameof(externalAddress));
+            Guard.NotEmpty(signature, nameof(signature));
+
+            bool result = false;
+
+            try
+            {
+                var bitcoinPubKeyAddress = new BitcoinPubKeyAddress(externalAddress, this.network);
+                result = bitcoinPubKeyAddress.VerifyMessage(message, signature);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug("Failed to verify message: {0}", ex.ToString());
+                this.logger.LogTrace("(-)[EXCEPTION]");
+            }
+            return result;
+        }
+
+        /// <inheritdoc />
+        public bool LoadWallet(string password, string name)
+        {
+            Guard.NotEmpty(password, nameof(password));
+            Guard.NotEmpty(name, nameof(name));
+
+            IWallet wallet = this.walletUnitOfWork.WalletRepository.GetByName(name);
+            if (wallet == null)
+            {
+                throw new WalletNotFoundException($"Wallet {name} not found.");
+            }
+
+            // Check the password.
+            try
+            {
+                if (!wallet.IsExtPubKeyWallet)
+                    Key.Parse(wallet.EncryptedSeed, password, wallet.Network);
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogDebug("Exception occurred: {0}", ex.ToString());
+                this.logger.LogTrace("(-)[EXCEPTION]");
+                throw new SecurityException(ex.Message);
+            }
+
+            this.OnWalletLoaded(wallet);
+
+            return true;
+        }
+
+        /// <inheritdoc />
+        public int LoadWallets()
+        {
+            IEnumerable<IWallet> wallets = this.walletUnitOfWork.WalletRepository.GetAll();
+            foreach (var wallet in wallets)
+            {
+                this.OnWalletLoaded(wallet);
+            }
+
+            return wallets.Count();
+        }
+
+        /// <summary>
+        /// called whenever an operation of wallet loading has been performed.
+        /// </summary>
+        /// <param name="wallet">The wallet that has been loaded</param>
+        protected virtual void OnWalletLoaded(IWallet wallet)
+        {
+            this.signals.Publish(new Events.WalletLoaded(wallet));
         }
     }
 }

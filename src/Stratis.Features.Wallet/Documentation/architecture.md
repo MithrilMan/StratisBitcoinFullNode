@@ -1,5 +1,9 @@
 # Stratis.Features.Wallet Architecture
 
+[TOC]
+
+------
+
 ## Introduction
 
 This feature acts as a foundation for specific wallet implementations that may follow, so one of the goal is to be extensible as much as possible.
@@ -12,7 +16,7 @@ Previously the Wallet was used by other feature and it had no interface, while n
 
 
 
-## Previous components
+## Previous wallet design (Stratis.Bitcoin.Features.Wallet)
 
 In the previous wallet feature (Stratis.Bitcoin.Features.Wallet) the main components are:
 
@@ -65,3 +69,30 @@ Component that exposes endpoints to the API Feature, allowing swagger to be used
 Works in synergy with WalletManager to keep the wallets updated with the chain.
 
 Contains the logic to perform a wallet resync, starting back in time respect to current chain tip.
+
+
+
+------
+
+
+
+## New Wallet design (Stratis.Features.Wallet)
+
+<u>**WARNING: this is a work in progress - can contains invalid information**</u>
+
+##### IWallet
+
+Interfaces that's used to pass wallet informations without disclosing internal details to external users.
+It contains the core information common to any custom Wallet implementation.
+
+#### WalletService
+
+Implementation of IWalletService, used to interact with the wallet.
+
+It's used by the WalletController and implement the actions required by defined use cases.
+
+#### WalletController
+
+Component that exposes endpoints to the API Feature, allowing swagger to be used to perform operation on the wallet.
+
+Internally it makes use of IWalletService to interact with wallets.

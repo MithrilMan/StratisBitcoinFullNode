@@ -1,19 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Stratis.Bitcoin.EventBus;
+﻿using Stratis.Bitcoin.EventBus;
 
 namespace Stratis.Features.Wallet.Events
 {
     /// <summary>
-    /// the wallet that has been created
+    /// the wallet that has been loaded.
     /// </summary>
     /// <seealso cref="Stratis.Bitcoin.EventBus.EventBase" />
-    public class WalletCreated : EventBase
+    public class WalletLoaded: EventBase
     {
         public IWallet Wallet { get; }
 
-        public WalletCreated(IWallet wallet)
+        public WalletLoaded(IWallet wallet)
         {
             this.Wallet = wallet;
         }
