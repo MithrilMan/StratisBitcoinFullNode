@@ -13,14 +13,23 @@ using Stratis.Features.Wallet.Interfaces;
 using Stratis.Bitcoin.Interfaces;
 using Stratis.Bitcoin.Signals;
 using Stratis.Bitcoin.Utilities;
+using Stratis.Features.Wallet.Events;
 
 namespace Stratis.Features.Wallet
 {
     public class WalletSyncManager : IWalletSyncManager, IDisposable
     {
-        private readonly IWalletManager walletManager;
+        /// <summary>Limit <see cref="blocksQueue"/> size to 100MB.</summary>
+        private const int MaxQueueSize = 100 * 1024 * 1024;
 
+        private const string DownloadChainLoop = "WalletManager.DownloadChain";
+
+        private readonly IWalletManager walletManager;
+        private readonly IWalletService walletService;
         private readonly ChainIndexer chainIndexer;
+
+        /// <summary>Global application life cycle control - triggers when application shuts down.</summary>
+        protected readonly INodeLifetime nodeLifetime;
 
         /// <summary>Instance logger.</summary>
         private readonly ILogger logger;
@@ -33,6 +42,9 @@ namespace Stratis.Features.Wallet
         private readonly IAsyncProvider asyncProvider;
         protected ChainedHeader walletTip;
 
+        /// <summary>Provider of time functions.</summary>
+        protected readonly IDateTimeProvider dateTimeProvider;
+
         public ChainedHeader WalletTip => this.walletTip;
 
         /// <summary>Queue which contains blocks that should be processed by <see cref="WalletManager"/>.</summary>
@@ -44,35 +56,53 @@ namespace Stratis.Features.Wallet
         /// <summary>Flag to determine when the <see cref="MaxQueueSize"/> is reached.</summary>
         private bool maxQueueSizeReached;
 
-        private SubscriptionToken blockConnectedSubscription;
-        private SubscriptionToken transactionReceivedSubscription;
+        /// <summary>
+        /// The event subscriptions list that holds the component active subscriptions.
+        /// </summary>
+        protected List<SubscriptionToken> eventSubscriptions;
 
-        /// <summary>Limit <see cref="blocksQueue"/> size to 100MB.</summary>
-        private const int MaxQueueSize = 100 * 1024 * 1024;
-
-        public WalletSyncManager(ILoggerFactory loggerFactory, IWalletManager walletManager, ChainIndexer chainIndexer,
-            Network network, IBlockStore blockStore, StoreSettings storeSettings, ISignals signals, IAsyncProvider asyncProvider)
+        public WalletSyncManager(ILoggerFactory loggerFactory, IWalletManager walletManager, IWalletService walletService, ChainIndexer chainIndexer,
+            IBlockStore blockStore, StoreSettings storeSettings, ISignals signals, IAsyncProvider asyncProvider, INodeLifetime nodeLifetime, IDateTimeProvider dateTimeProvider)
         {
-            Guard.NotNull(loggerFactory, nameof(loggerFactory));
-            Guard.NotNull(walletManager, nameof(walletManager));
-            Guard.NotNull(chainIndexer, nameof(chainIndexer));
-            Guard.NotNull(network, nameof(network));
-            Guard.NotNull(blockStore, nameof(blockStore));
-            Guard.NotNull(storeSettings, nameof(storeSettings));
-            Guard.NotNull(signals, nameof(signals));
-            Guard.NotNull(asyncProvider, nameof(asyncProvider));
+            this.walletManager = Guard.NotNull(walletManager, nameof(walletManager));
+            this.walletService = Guard.NotNull(walletService, nameof(walletService));
+            this.chainIndexer = Guard.NotNull(chainIndexer, nameof(chainIndexer));
+            this.blockStore = Guard.NotNull(blockStore, nameof(blockStore));
+            this.storeSettings = Guard.NotNull(storeSettings, nameof(storeSettings));
+            this.signals = Guard.NotNull(signals, nameof(signals));
+            this.asyncProvider = Guard.NotNull(asyncProvider, nameof(asyncProvider));
+            this.nodeLifetime = Guard.NotNull(nodeLifetime, nameof(nodeLifetime));
+            this.dateTimeProvider = Guard.NotNull(dateTimeProvider, nameof(dateTimeProvider));
 
-            this.walletManager = walletManager;
-            this.chainIndexer = chainIndexer;
-            this.blockStore = blockStore;
-            this.storeSettings = storeSettings;
-            this.signals = signals;
-            this.asyncProvider = asyncProvider;
-            this.logger = loggerFactory.CreateLogger(this.GetType().FullName);
+            this.logger = Guard.NotNull(loggerFactory, nameof(loggerFactory)).CreateLogger(this.GetType().FullName);
             this.blocksQueue = this.asyncProvider.CreateAndRunAsyncDelegateDequeuer<Block>($"{nameof(WalletSyncManager)}-{nameof(this.blocksQueue)}", this.OnProcessBlockAsync);
 
             this.blocksQueueSize = 0;
+
+            this.eventSubscriptions = new List<SubscriptionToken>();
         }
+
+        private void subscribeToEvents()
+        {
+            lock (this.eventSubscriptions)
+            {
+                this.eventSubscriptions.Add(this.signals.Subscribe<BlockConnected>(this.OnBlockConnected));
+                this.eventSubscriptions.Add(this.signals.Subscribe<TransactionReceived>(this.OnTransactionAvailable));
+                this.eventSubscriptions.Add(this.signals.Subscribe<Events.WalletCreated>(this.OnWalletCreated));
+                this.eventSubscriptions.Add(this.signals.Subscribe<Events.WalletRecovered>(this.OnWalletRecovered));
+            }
+        }
+
+        private void unsubscribeToEvents()
+        {
+            lock (this.eventSubscriptions)
+            {
+                this.eventSubscriptions?.ForEach(subscription => this.signals.Unsubscribe(subscription));
+
+                this.eventSubscriptions.Clear();
+            }
+        }
+
 
         /// <inheritdoc />
         public void Start()
@@ -106,8 +136,7 @@ namespace Stratis.Features.Wallet
                 this.walletTip = fork;
             }
 
-            this.blockConnectedSubscription = this.signals.Subscribe<BlockConnected>(this.OnBlockConnected);
-            this.transactionReceivedSubscription = this.signals.Subscribe<TransactionReceived>(this.OnTransactionAvailable);
+            this.subscribeToEvents();
         }
 
         private void OnTransactionAvailable(TransactionReceived transactionReceived)
@@ -120,11 +149,41 @@ namespace Stratis.Features.Wallet
             this.ProcessBlock(blockConnected.ConnectedBlock.Block);
         }
 
+        private void OnWalletCreated(WalletCreated @event)
+        {
+            // If the chain is downloaded, we set the height of the newly created wallet to it.
+            // However, if the chain is still downloading when the user creates a wallet,
+            // we wait until it is downloaded in order to set it. Otherwise, the height of the wallet will be the height of the chain at that moment.
+            if (this.chainIndexer.IsDownloaded())
+            {
+                this.walletService.UpdateLastBlockSyncedHeight(@event.Wallet, this.chainIndexer.Tip);
+            }
+            else
+            {
+                this.UpdateWhenChainDownloaded(new[] { @event.Wallet }, this.dateTimeProvider.GetUtcNow());
+            }
+        }
+
+        private void OnWalletRecovered(WalletRecovered @event)
+        {
+            // If the chain is downloaded, we set the height of the recovered wallet to that of the recovery date.
+            // However, if the chain is still downloading when the user restores a wallet,
+            // we wait until it is downloaded in order to set it. Otherwise, the height of the wallet may not be known.
+            if (this.chainIndexer.IsDownloaded())
+            {
+                int blockSyncStart = this.chainIndexer.GetHeightAtTime(@event.CreationTime);
+                this.walletService.UpdateLastBlockSyncedHeight(@event.Wallet, this.chainIndexer.GetHeader(blockSyncStart));
+            }
+            else
+            {
+                this.UpdateWhenChainDownloaded(new[] { @event.Wallet }, @event.CreationTime);
+            }
+        }
+
         /// <inheritdoc />
         public void Stop()
         {
-            this.signals.Unsubscribe(this.blockConnectedSubscription);
-            this.signals.Unsubscribe(this.transactionReceivedSubscription);
+            this.unsubscribeToEvents();
         }
 
         /// <summary>Called when a <see cref="Block"/> is added to the <see cref="blocksQueue"/>.
@@ -310,6 +369,45 @@ namespace Stratis.Features.Wallet
             this.walletTip = chainedHeader ?? throw new WalletException("Invalid block height");
             this.walletManager.WalletTipHash = chainedHeader.HashBlock;
             this.walletManager.WalletTipHeight = chainedHeader.Height;
+        }
+
+        /// <summary>
+        /// Updates details of the last block synced in a wallet when the chain of headers finishes downloading.
+        /// </summary>
+        /// <param name="wallets">The wallets to update when the chain has downloaded.</param>
+        /// <param name="date">The creation date of the block with which to update the wallet.</param>
+        private void UpdateWhenChainDownloaded(IEnumerable<IWallet> wallets, DateTime date)
+        {
+            if (this.asyncProvider.IsAsyncLoopRunning(DownloadChainLoop))
+            {
+                return;
+            }
+
+            this.asyncProvider.CreateAndRunAsyncLoopUntil(DownloadChainLoop, this.nodeLifetime.ApplicationStopping,
+                () => this.chainIndexer.IsDownloaded(),
+                () =>
+                {
+                    int heightAtDate = this.chainIndexer.GetHeightAtTime(date);
+
+                    foreach (Wallet wallet in wallets)
+                    {
+                        this.logger.LogDebug("The chain of headers has finished downloading, updating wallet '{0}' with height {1}", wallet.Name, heightAtDate);
+                        this.UpdateLastBlockSyncedHeight(wallet, this.ChainIndexer.GetHeader(heightAtDate));
+                        this.SaveWallet(wallet);
+                    }
+                },
+                (ex) =>
+                {
+                    // In case of an exception while waiting for the chain to be at a certain height, we just cut our losses and
+                    // sync from the current height.
+                    this.logger.LogError($"Exception occurred while waiting for chain to download: {ex.Message}");
+
+                    foreach (Wallet wallet in wallets)
+                    {
+                        this.UpdateLastBlockSyncedHeight(wallet, this.chainIndexer.Tip);
+                    }
+                },
+                TimeSpans.FiveSeconds);
         }
 
         /// <inheritdoc />

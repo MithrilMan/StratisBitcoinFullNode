@@ -53,6 +53,25 @@ Wallet class doesn't account for modularity, it needs to implement a common inte
 
 
 
+##### Wallet Locking/Unlocking
+
+Bitcoin has a concept that's wallet locking/unlocking, this allows you to unlock a wallet for a specified amount of time so you can then do operation on its addresses and if you don't unlock an encrypted wallet, you can't perform any RPC operation on the wallet that involve spending or exporting keys.
+
+We have a fake implementation of it, in the sense that we have LockWallet and UnlockWallet methods even on controller, and they store the secrets in a cache that lasts for a specified time span, but we don't really use the mechanism to perform operations on these addresses, because where we need to do operations on keys, we pass the password to the methods, recreating the secrets if we doesn't found them in the cache.
+Basically we don't implement any timespan unlocking mechanism at all.
+We should instead (if we want to implement the wallet similar to Bitcoin) allow certain operations only on unlocked wallets, so if we don't find the secret in the cache (that we manage already, so that's weird, like having an half done implementation) then we'll throw.
+
+
+
+##### Lock on wallet operations
+
+Wallet Controller previously was calling WalletManager for many of its operation and it was using a lockObject to perform some operation like GetUnusedAccount.
+The problem that it tried to solve was that if an operation of account creation happens simultaneously, it may lead to problems or race conditions.
+What I see as a problem was that the lock was at WalletManager level (was locking on `lockObject` variable) while it should be at wallet level.
+At the moment I'm removing every lock we are using, we'll reintroduce locking once the new design is settled down.
+
+
+
 ---
 
 Repository reference for implementations: https://github.com/MithrilMan/StratisBitcoinFullNode/tree/research/wallet/

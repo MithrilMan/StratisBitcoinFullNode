@@ -17,21 +17,24 @@ namespace Stratis.Features.Wallet.Repository
         ITransactionDataRepository TransactionDataRepository { get; }
 
         /// <summary>
-        /// Begins a session, that must be followed either by a <see cref="Commit"/> or a <see cref="Rollback"/>.
+        /// Begins a session, that must be followed either by a <see cref="Commit" /> or a <see cref="Rollback" />.
         /// </summary>
-        /// <exception cref="IWalletSessionAlreadyOpen">Thrown if a session is already open.</exception>
-        void Begin();
+        /// <returns>An <see cref="IDisposable"/> session. If no explicit Save is called before it being disposed, a rollback will be performed.</returns>
+        /// <exception cref="UnitOfWorkSessionAlreadyOpenException">Thrown if a session is already open.</exception>
+        IUnitOfWorkSession Begin();
 
-        /// <summary>
-        /// Commits current session.
-        /// </summary>
-        /// <exception cref="IWalletSessionNotOpenException">Thrown if no session is open.</exception>
-        void Save();
+        ///// <summary>
+        ///// Commits current session.
+        ///// </summary>
+        ///// <exception cref="UnitOfWorkSessionNotOpenException">Thrown if no session is open.</exception>
+        //void Commit();
 
-        /// <summary>
-        /// Rollbacks current session.
-        /// </summary>
-        /// <exception cref="IWalletSessionNotOpenException">Thrown if no session is open.</exception>
-        void Rollback();
+        ///// <summary>
+        ///// Rollbacks current session.
+        ///// </summary>
+        ///// <exception cref="UnitOfWorkSessionNotOpenException">Thrown if no session is open.</exception>
+        //void Rollback();
+
+        // TODO: investigating best approach. Currently trying an IDisposable pattern to handle sessions
     }
 }

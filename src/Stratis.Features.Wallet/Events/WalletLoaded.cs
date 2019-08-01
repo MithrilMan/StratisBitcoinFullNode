@@ -3,7 +3,7 @@
 namespace Stratis.Features.Wallet.Events
 {
     /// <summary>
-    /// the wallet that has been loaded.
+    /// The wallet that has been loaded.
     /// </summary>
     /// <seealso cref="Stratis.Bitcoin.EventBus.EventBase" />
     public class WalletLoaded: EventBase

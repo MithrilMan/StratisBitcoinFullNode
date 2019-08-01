@@ -25,6 +25,8 @@ In the previous wallet feature (Stratis.Bitcoin.Features.Wallet) the main compon
 - [WalletController](#WalletController)
 - [WalletSyncManager](#WalletSyncManager)
 
+
+
 #### Wallet
 
 This class represents the Wallet model fully. It comprehends a hierarchy of `HDAccounts` each one with two lists of HDAddresses: one for internal uses (change addresses) and one for external uses (the address used to receive funds from other people).
@@ -34,6 +36,8 @@ Each one of the inner classes implements their own methods to query data related
 Basically this design doesn't implement any separation of concern and the wallet implements most of the funtionality like persistence, repository, query and so on.
 
 It doesn't implement any interface so this object was used directly from any party interested in using the wallet feature.
+
+
 
 #### WalletManager
 
@@ -60,9 +64,19 @@ This component is responsible for different tasks:
   private Dictionary<OutPoint, TransactionData> inputLookup;
   ```
 
+
+
+#### WalletTransactionHandler
+
+A handler that has various functionalities related to transaction operations.
+
+
+
 #### WalletController
 
 Component that exposes endpoints to the API Feature, allowing swagger to be used to perform operation on the wallet.
+
+
 
 #### WalletSyncManager
 
@@ -80,16 +94,32 @@ Contains the logic to perform a wallet resync, starting back in time respect to 
 
 <u>**WARNING: this is a work in progress - can contains invalid information**</u>
 
-##### IWallet
+#### IWallet
 
 Interfaces that's used to pass wallet informations without disclosing internal details to external users.
 It contains the core information common to any custom Wallet implementation.
+
+
 
 #### WalletService
 
 Implementation of IWalletService, used to interact with the wallet.
 
 It's used by the WalletController and implement the actions required by defined use cases.
+
+
+
+#### WalletLockTracker
+
+Keeps track of wallet locking status.
+
+
+
+#### HdAddressLookup
+
+Keeps track of wallet addresses in order to allow faster look-ups of transactions affecting the wallets' addresses.
+
+
 
 #### WalletController
 

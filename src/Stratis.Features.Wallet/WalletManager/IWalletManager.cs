@@ -33,26 +33,6 @@ namespace Stratis.Features.Wallet
         int WalletTipHeight { get; set; }
 
         /// <summary>
-        /// Lists all spendable transactions from all accounts in the wallet.
-        /// </summary>
-        /// <param name="walletName">Name of the wallet.</param>
-        /// <param name="confirmations">The confirmations.</param>
-        /// <returns>
-        /// A collection of spendable outputs
-        /// </returns>
-        IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWallet(string walletName, int confirmations = 0);
-
-        /// <summary>
-        /// Lists all spendable transactions from the accounts in the wallet participating in staking.
-        /// </summary>
-        /// <param name="walletName">Name of the wallet.</param>
-        /// <param name="confirmations">The confirmations.</param>
-        /// <returns>
-        /// A collection of spendable outputs
-        /// </returns>
-        IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWalletForStaking(string walletName, int confirmations = 0);
-
-        /// <summary>
         /// Helps identify UTXO's that can participate in staking.
         /// </summary>
         /// <returns>A dictionary containing string and template pairs - e.g. { "P2PK", PayToPubkeyTemplate.Instance }</returns>
@@ -75,68 +55,9 @@ namespace Stratis.Features.Wallet
         IEnumerable<UnspentOutputReference> GetSpendableTransactionsInAccount(WalletAccountReference walletAccountReference, int confirmations = 0);
 
         /// <summary>
-        /// Unlocks a wallet for the specified time.
-        /// </summary>
-        /// <param name="password">The wallet password.</param>
-        /// <param name="name">The name of the wallet.</param>
-        /// <param name="timeout">The timeout in seconds.</param>
-        void UnlockWallet(string password, string name, int timeout);
-
-        /// <summary>
-        /// Locks the wallet.
-        /// </summary>
-        /// <param name="name">The name of the wallet.</param>
-        void LockWallet(string name);
-
-        /// <summary>
-        /// Recovers a wallet using mnemonic and password.
-        /// </summary>
-        /// <param name="password">The user's password.</param>
-        /// <param name="name">The name of the wallet.</param>
-        /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
-        /// <param name="creationTime">The date and time this wallet was created.</param>
-        /// <param name="passphrase">The passphrase used in the seed.</param>
-        /// <returns>The recovered wallet.</returns>
-        IWallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase = null);
-
-        /// <summary>
-        /// Recovers a wallet using extended public key and account index.
-        /// </summary>
-        /// <param name="name">The name of the wallet.</param>
-        /// <param name="extPubKey">The extended public key.</param>
-        /// <param name="accountIndex">The account number.</param>
-        /// <param name="creationTime">The date and time this wallet was created.</param>
-        /// <returns>The recovered wallet.</returns>
-        IWallet RecoverWallet(string name, ExtPubKey extPubKey, int accountIndex, DateTime creationTime);
-
-        /// <summary>
         /// Deletes a wallet.
         /// </summary>
         void DeleteWallet();
-
-        /// <summary>
-        /// Gets an account that contains no transactions.
-        /// </summary>
-        /// <param name="walletName">The name of the wallet from which to get an account.</param>
-        /// <param name="password">The password used to decrypt the private key.</param>
-        /// <remarks>
-        /// According to BIP44, an account at index (i) can only be created when the account
-        /// at index (i - 1) contains transactions.
-        /// </remarks>
-        /// <returns>An unused account.</returns>
-        HdAccount GetUnusedAccount(string walletName, string password);
-
-        /// <summary>
-        /// Gets an account that contains no transactions.
-        /// </summary>
-        /// <param name="wallet">The wallet from which to get an account.</param>
-        /// <param name="password">The password used to decrypt the private key.</param>
-        /// <remarks>
-        /// According to BIP44, an account at index (i) can only be created when the account
-        /// at index (i - 1) contains transactions.
-        /// </remarks>
-        /// <returns>An unused account.</returns>
-        HdAccount GetUnusedAccount(IWallet wallet, string password);
 
         /// <summary>
         /// Gets an address that contains no transaction.
@@ -237,17 +158,6 @@ namespace Stratis.Features.Wallet
         bool ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true);
 
         /// <summary>
-        /// Saves the wallet into the file system.
-        /// </summary>
-        /// <param name="wallet">The wallet to save.</param>
-        void SaveWallet(IWallet wallet);
-
-        /// <summary>
-        /// Saves all the loaded wallets into the file system.
-        /// </summary>
-        void SaveWallets();
-
-        /// <summary>
         /// Gets the extension of the wallet files.
         /// </summary>
         /// <returns>The wallet file extension, if any.</returns>
@@ -291,22 +201,6 @@ namespace Stratis.Features.Wallet
         bool ContainsWallets { get; }
 
         /// <summary>
-        /// Gets the extended public key of an account.
-        /// </summary>
-        /// <param name="accountReference">The account.</param>
-        /// <returns>The extended public key.</returns>
-        string GetExtPubKey(WalletAccountReference accountReference);
-
-        /// <summary>
-        /// Gets the extended private key of an account.
-        /// </summary>
-        /// <param name="accountReference">The account.</param>
-        /// <param name="password">The password used to decrypt the encrypted seed.</param>
-        /// <param name="cache">whether to cache the private key for future use.</param>
-        /// <returns>The private key.</returns>
-        ExtKey GetExtKey(WalletAccountReference accountReference, string password = "", bool cache = false);
-
-        /// <summary>
         /// Gets the lowest LastBlockSyncedHeight of all loaded wallet account roots.
         /// </summary>
         /// <returns>The lowest LastBlockSyncedHeight or null if there are no account roots yet.</returns>
@@ -340,13 +234,5 @@ namespace Stratis.Features.Wallet
         /// <param name="fromDate">The date after which the transactions should be removed.</param>
         /// <returns>A list of objects made up of a transactions ID along with the time at which they were created.</returns>
         HashSet<(uint256, DateTimeOffset)> RemoveTransactionsFromDate(string walletName, DateTimeOffset fromDate);
-
-        /// <summary>
-        /// Gets the index of a special account.
-        /// Special accounts are accounts reserved for special purpose, like Cold Staking.
-        /// </summary>
-        /// <param name="purpose">The account purpose, used to generate the corresponding index.</param>
-        /// <returns>Index of a special account</returns>
-        int GetSpecialAccountIndex(string purpose);
     }
 }

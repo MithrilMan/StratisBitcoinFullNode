@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Stratis.Bitcoin.Utilities;
 
@@ -9,7 +10,7 @@ namespace Stratis.Features.Wallet.Repository
     /// </summary>
     public class DbWalletUnitOfWork : IWalletUnitOfWork
     {
-        private readonly ILoggerFactory loggerFactory;
+        private ILogger logger;
 
         public IWalletRepository WalletRepository { get; }
 
@@ -19,23 +20,63 @@ namespace Stratis.Features.Wallet.Repository
 
         public ITransactionDataRepository TransactionDataRepository { get; }
 
+        private IUnitOfWorkSession currentSession;
+
         public DbWalletUnitOfWork(ILoggerFactory loggerFactory, IWalletRepository walletRepository, IHdAccountRepository hdAccountRepository, IHdAddressRepository hdAddressRepository, ITransactionDataRepository transactionDataRepository)
         {
-            this.loggerFactory = Guard.NotNull(loggerFactory, nameof(loggerFactory));
+            this.logger = Guard.NotNull(loggerFactory, nameof(loggerFactory)).CreateLogger(this.GetType().Name);
+
             this.WalletRepository = Guard.NotNull(walletRepository, nameof(walletRepository));
             this.HdAccountRepository = Guard.NotNull(hdAccountRepository, nameof(hdAccountRepository));
             this.HdAddressRepository = Guard.NotNull(hdAddressRepository, nameof(hdAddressRepository));
             this.TransactionDataRepository = Guard.NotNull(transactionDataRepository, nameof(transactionDataRepository));
         }
 
-        public void Begin()
-        {
 
+        /// <inheritdoc />
+        public IUnitOfWorkSession Begin()
+        {
+            if (this.currentSession != null)
+            {
+                throw new UnitOfWorkSessionAlreadyOpenException();
+            }
+
+            this.currentSession = new UnitOfWorkSession(/*a dbcontext/transaction/whatever*/);
+            return this.currentSession;
         }
 
-        public void Save()
-        {
+        ///// <inheritdoc />
+        //public void Commit()
+        //{
+        //    if (this.currentSession != null)
+        //    {
+        //        throw new UnitOfWorkSessionNotOpenException();
+        //    }
 
+        //    this.currentSession.Commit();
+        //    this.currentSession = null;
+        //}
+
+        ///// <inheritdoc />
+        //public void Rollback()
+        //{
+        //    if (this.currentSession != null)
+        //    {
+        //        throw new UnitOfWorkSessionNotOpenException();
+        //    }
+
+        //    this.currentSession.RollBack();
+        //    this.currentSession = null;
+        //}
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            if (this.currentSession != null)
+            {
+                this.currentSession.Dispose();
+                this.currentSession = null;
+            }
         }
     }
 }

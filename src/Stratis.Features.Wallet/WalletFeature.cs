@@ -168,9 +168,14 @@ namespace Stratis.Features.Wallet
                 .DependOn<RPCFeature>()
                 .FeatureServices(services =>
                     {
+                        services
+                            .AddSingleton<IWalletLockTracker, WalletLockTracker>()
+                            .AddTransient<IWalletService, WalletService>()
+                            ;
+
                         services.AddSingleton<IWalletSyncManager, WalletSyncManager>();
                         services.AddSingleton<IWalletTransactionHandler, WalletTransactionHandler>();
-                        services.AddSingleton<IWalletManager, JsonWalletManager>();
+                        services.AddSingleton<IWalletManager, WalletManager>();
                         services.AddSingleton<IWalletFeePolicy, WalletFeePolicy>();
                         services.AddSingleton<WalletController>();
                         services.AddSingleton<WalletRPCController>();

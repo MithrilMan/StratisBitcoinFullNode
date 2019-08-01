@@ -1,4 +1,6 @@
-﻿using NBitcoin;
+﻿using System;
+using System.Collections.Generic;
+using NBitcoin;
 
 namespace Stratis.Features.Wallet
 {
@@ -9,20 +11,41 @@ namespace Stratis.Features.Wallet
     public interface IWalletService //: IWalletUseCases
     {
         /// <summary>
-        /// Creates a wallet and persist it as a file on the local system.
+        /// Creates a wallet.
         /// </summary>
         /// <param name="password">The password used to encrypt sensitive info.</param>
         /// <param name="name">The name of the wallet.</param>
         /// <param name="passphrase">The passphrase used in the seed.</param>
         /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
-        /// <returns>A mnemonic defining the wallet's seed used to generate addresses.</returns>
-        Mnemonic CreateWallet(string password, string name, string passphrase = null, Mnemonic mnemonic = null);
+        /// <returns>A mnemonic defining the wallet's seed used to generate addresses and the generated wallet.</returns>
+        (Mnemonic mnemonic, IWallet wallet) CreateWallet(string password, string name, string passphrase = null, Mnemonic mnemonic = null);
+
+        /// <summary>
+        /// Recovers a wallet using mnemonic and password.
+        /// </summary>
+        /// <param name="password">The user's password.</param>
+        /// <param name="name">The name of the wallet.</param>
+        /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
+        /// <param name="creationTime">The date and time this wallet was created.</param>
+        /// <param name="passphrase">The passphrase used in the seed.</param>
+        /// <returns>The recovered wallet.</returns>
+        IWallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase = null);
+
+        /// <summary>
+        /// Recovers a wallet using extended public key and account index.
+        /// </summary>
+        /// <param name="name">The name of the wallet.</param>
+        /// <param name="extPubKey">The extended public key.</param>
+        /// <param name="accountIndex">The account number.</param>
+        /// <param name="creationTime">The date and time this wallet was created.</param>
+        /// <returns>The recovered wallet.</returns>
+        IWallet RecoverWallet(string name, ExtPubKey extPubKey, int accountIndex, DateTime creationTime);
 
         /// <summary>
         /// Signs a string message.
         /// </summary>
         /// <param name="password">The user's password.</param>
-        /// <param name="walletName">The name of the wallet.</param>
+        /// <param name="walletName">Name of the wallet.</param>
         /// <param name="externalAddress">Address to use to sign.</param>
         /// <param name="message">Message to sign.</param>
         /// <returns>The generated signature.</returns>
@@ -59,5 +82,99 @@ namespace Stratis.Features.Wallet
         /// </summary>
         /// <returns>Number of loaded wallets.</returns>
         int LoadWallets();
+
+        /// <summary>
+        /// Gets the extended private key of an account.
+        /// </summary>
+        /// <param name="accountReference">The account.</param>
+        /// <param name="password">The password used to decrypt the encrypted seed.</param>
+        /// <param name="cache">whether to cache the private key for future use.</param>
+        /// <returns>The private key.</returns>
+        ExtKey GetExtKey(WalletAccountReference accountReference, string password = "", bool cache = false);
+
+        /// <summary>
+        /// Updates the wallet with the height of the last block synced.
+        /// </summary>
+        /// <param name="wallet">The wallet to update.</param>
+        /// <param name="chainedHeader">The height of the last block synced.</param>
+        void UpdateLastBlockSyncedHeight(IWallet wallet, ChainedHeader chainedHeader);
+
+
+        /// <summary>
+        /// Gets all wallet addresses.
+        /// </summary>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <returns>Both internal and external wallet addresses.</returns>
+        IEnumerable<HdAddress> GetAllWalletAddresses(string walletName);
+
+        /// <summary>
+        /// Gets all wallet transactions.
+        /// </summary>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <returns>
+        /// List of wallet related transactions.
+        /// </returns>
+        IEnumerable<TransactionData> GetAllWalletTransactions(string walletName);
+
+        /// <summary>
+        /// Gets an account that contains no transactions.
+        /// </summary>
+        /// <param name="walletName">The name of the wallet from which to get an account.</param>
+        /// <param name="password">The password used to decrypt the private key.</param>
+        /// <remarks>
+        /// According to BIP44, an account at index (i) can only be created when the account
+        /// at index (i - 1) contains transactions.
+        /// </remarks>
+        /// <returns>An unused account.</returns>
+        HdAccount GetUnusedAccount(string walletName, string password);
+
+        /// <summary>
+        /// Gets an account that contains no transactions.
+        /// </summary>
+        /// <param name="wallet">The wallet from which to get an account.</param>
+        /// <param name="password">The password used to decrypt the private key.</param>
+        /// <remarks>
+        /// According to BIP44, an account at index (i) can only be created when the account
+        /// at index (i - 1) contains transactions.
+        /// </remarks>
+        /// <returns>An unused account.</returns>
+        HdAccount GetUnusedAccount(IWallet wallet, string password);
+
+        /// <summary>
+        /// Gets the extended public key of an account.
+        /// </summary>
+        /// <param name="accountReference">The account.</param>
+        /// <returns>The extended public key.</returns>
+        string GetExtPubKey(WalletAccountReference accountReference);
+
+        /// <summary>
+        /// Gets the index of a special account.
+        /// Special accounts are accounts reserved for special purpose, like Cold Staking.
+        /// </summary>
+        /// <param name="purpose">The account purpose, used to generate the corresponding index.</param>
+        /// <returns>Index of a special account</returns>
+        int GetSpecialAccountIndex(string purpose);
+
+        /// <summary>
+        /// Lists all spendable transactions from all accounts in the wallet.
+        /// </summary>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <param name="confirmations">The confirmations.</param>
+        /// <returns>
+        /// A collection of spendable outputs
+        /// </returns>
+        IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWallet(string walletName, int confirmations = 0);
+
+        /// <summary>
+        /// Lists all spendable transactions from all accounts in the wallet.
+        /// </summary>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <param name="confirmations">The confirmations.</param>
+        /// <param name="accountFilter">The account filter.</param>
+        /// <returns>
+        /// A collection of spendable outputs
+        /// </returns>
+        IEnumerable<UnspentOutputReference> GetSpendableTransactionsInWallet(string walletName, int confirmations, Func<HdAccount, bool> accountFilter)
+
     }
 }

@@ -25,6 +25,12 @@ namespace Stratis.Features.Wallet.Repository
         /// </returns>
         IWallet GetByEncryptedSeed(string encryptedSeed);
 
+        /// <summary>
+        /// Sets the wallet tip (Hash and Height).
+        /// </summary>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <param name="tip">The tip.</param>
+        /// <returns></returns>
         IWallet SetWalletTip(string walletName, ChainedHeader tip);
     }
 }

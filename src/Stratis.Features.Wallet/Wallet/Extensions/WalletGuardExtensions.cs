@@ -28,6 +28,8 @@
                         throw new WalletNotFoundException(message ?? "Wallet not found.");
                     case HdAddress _:
                         throw new HdAddressNotFoundException(message ?? "HdAddress not found.");
+                    case HdAccount _:
+                        throw new HdAccountNotFoundException(message ?? "HdAddress not found.");
                     default:
                         throw new WalletException(message ?? "Object is null");
                 }
