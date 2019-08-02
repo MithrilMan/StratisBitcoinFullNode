@@ -105,6 +105,13 @@ namespace Stratis.Features.Wallet
             return WalletFileExtension;
         }
 
+        /// <inheritdoc />
+        public (string folderPath, IEnumerable<string>) GetWalletsFiles()
+        {
+            return (this.fileStorage.FolderPath, this.fileStorage.GetFilesNames(this.GetWalletFileExtension()));
+        }
+
+
         protected override void OnWalletCreated(WalletCreated @event)
         {
             base.OnWalletCreated(@event);

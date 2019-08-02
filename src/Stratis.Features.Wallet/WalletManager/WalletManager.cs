@@ -80,9 +80,9 @@ namespace Stratis.Features.Wallet
         // 1. the list of unspent outputs for checking whether inputs from a transaction are being spent by our wallet and
         // 2. wallet addresses in order to allow faster look-ups of transactions affecting the wallets' addresses.
         // 3. a mapping of all inputs with their corresponding transactions, to facilitate rapid lookup
-        private Dictionary<OutPoint, TransactionData> outpointLookup;
+        private readonly IOutPointLookup outpointLookup;
         private readonly IHdAddressLookup hdAddressLookup;
-        private Dictionary<OutPoint, TransactionData> inputLookup;
+        private readonly IOutPointLookup inputLookup;
 
         #region NEW members
         protected ConcurrentBag<IWallet> loadedWallets;
@@ -106,6 +106,8 @@ namespace Stratis.Features.Wallet
             ISignals signals,
             IWalletService walletService,
             IHdAddressLookup hdAddressLookup,
+            IOutPointLookup outpointLookup,
+            IOutPointLookup inputLookup,
             IBroadcasterManager broadcasterManager = null) // no need to know about transactions the node will broadcast to.
         {
             Guard.NotNull(dataFolder, nameof(dataFolder));
@@ -122,6 +124,8 @@ namespace Stratis.Features.Wallet
             this.walletService = Guard.NotNull(walletService, nameof(walletService));
             this.dateTimeProvider = Guard.NotNull(dateTimeProvider, nameof(dateTimeProvider));
             this.hdAddressLookup = Guard.NotNull(hdAddressLookup, nameof(hdAddressLookup));
+            this.outpointLookup = Guard.NotNull(outpointLookup, nameof(outpointLookup));
+            this.inputLookup = Guard.NotNull(inputLookup, nameof(inputLookup));
             this.broadcasterManager = broadcasterManager;
 
             this.lockObject = new object();
@@ -132,9 +136,6 @@ namespace Stratis.Features.Wallet
             {
                 this.broadcasterManager.TransactionStateChanged += this.BroadcasterManager_TransactionStateChanged;
             }
-
-            this.outpointLookup = new Dictionary<OutPoint, TransactionData>();
-            this.inputLookup = new Dictionary<OutPoint, TransactionData>();
 
             this.loadedWallets = new ConcurrentBag<IWallet>();
             this.eventSubscriptions = new List<SubscriptionToken>();
@@ -269,12 +270,6 @@ namespace Stratis.Features.Wallet
             }
 
             return addresses;
-        }
-
-        /// <inheritdoc />
-        public (string folderPath, IEnumerable<string>) GetWalletsFiles()
-        {
-            return (this.fileStorage.FolderPath, this.fileStorage.GetFilesNames(this.GetWalletFileExtension()));
         }
 
         /// <inheritdoc />
@@ -620,7 +615,8 @@ namespace Stratis.Features.Wallet
                     {
                         // See if this input is being used by another wallet transaction present in the index.
                         // The inputs themselves may not belong to the wallet, but the transaction data in the index has to be for a wallet transaction.
-                        if (this.inputLookup.TryGetValue(input.PrevOut, out TransactionData indexData))
+                        TransactionData indexData = this.inputLookup.Get(input.PrevOut);
+                        if (indexData != null)
                         {
                             // It's the same transaction, which can occur if the transaction had been added to the wallet previously. Ignore.
                             if (indexData.Id == hash)
@@ -654,7 +650,8 @@ namespace Stratis.Features.Wallet
                 // Check the inputs - include those that have a reference to a transaction containing one of our scripts and the same index.
                 foreach (TxIn input in transaction.Inputs)
                 {
-                    if (!this.outpointLookup.TryGetValue(input.PrevOut, out TransactionData tTx))
+                    TransactionData tTx = this.outpointLookup.Get(input.PrevOut);
+                    if (tTx == null)
                     {
                         continue;
                     }
@@ -958,7 +955,7 @@ namespace Stratis.Features.Wallet
                         // We only exclude from the list the confirmed spent UTXOs.
                         if (transaction.SpendingDetails?.BlockHeight == null)
                         {
-                            this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
+                            this.outpointLookup.Add(transaction);
                         }
                     }
                 }
@@ -984,7 +981,7 @@ namespace Stratis.Features.Wallet
 
             lock (this.lockObject)
             {
-                this.outpointLookup[new OutPoint(transactionData.Id, transactionData.Index)] = transactionData;
+                this.outpointLookup.Add(transactionData);
             }
         }
 
@@ -998,7 +995,7 @@ namespace Stratis.Features.Wallet
 
             lock (this.lockObject)
             {
-                this.outpointLookup.Remove(new OutPoint(transactionData.Id, transactionData.Index));
+                this.outpointLookup.Remove(transactionData);
             }
         }
 
@@ -1009,9 +1006,9 @@ namespace Stratis.Features.Wallet
         {
             lock (this.lockObject)
             {
-                this.outpointLookup = new Dictionary<OutPoint, TransactionData>();
+                this.outpointLookup.Clear();
 
-                foreach (Wallet wallet in this.Wallets)
+                foreach (Wallet wallet in this.loadedWallets)
                 {
                     foreach (HdAddress address in wallet.GetAllAddresses(a => true))
                     {
@@ -1019,7 +1016,7 @@ namespace Stratis.Features.Wallet
                         // We only exclude from the list the confirmed spent UTXOs.
                         foreach (TransactionData transaction in address.Transactions.Where(t => t.SpendingDetails?.BlockHeight == null))
                         {
-                            this.outpointLookup[new OutPoint(transaction.Id, transaction.Index)] = transaction;
+                            this.outpointLookup.Add(transaction);
                         }
                     }
                 }
@@ -1038,7 +1035,7 @@ namespace Stratis.Features.Wallet
             {
                 foreach (OutPoint input in transaction.Inputs.Select(s => s.PrevOut))
                 {
-                    this.inputLookup[input] = transactionData;
+                    this.inputLookup.Add(input, transactionData);
                 }
             }
         }
