@@ -290,9 +290,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
             try
             {
-                IWallet wallet = this.walletManager.RecoverWallet(request.Password, request.Name, request.Mnemonic, request.CreationDate, passphrase: request.Passphrase);
-
-                this.SyncFromBestHeightForRecoveredWallets(request.CreationDate);
+                IWallet wallet = this.walletService.RecoverWallet(request.Password, request.Name, request.Mnemonic, request.CreationDate, passphrase: request.Passphrase);
 
                 return this.Ok();
             }
@@ -340,10 +338,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
                         ? request.ExtPubKey
                         : LegacyExtPubKeyConverter.ConvertIfInLegacyStratisFormat(request.ExtPubKey, this.network);
 
-                this.walletManager.RecoverWallet(request.Name, ExtPubKey.Parse(accountExtPubKey), request.AccountIndex,
-                    request.CreationDate);
-
-                this.SyncFromBestHeightForRecoveredWallets(request.CreationDate);
+                this.walletService.RecoverWallet(request.Name, ExtPubKey.Parse(accountExtPubKey), request.AccountIndex, request.CreationDate);
 
                 return this.Ok();
             }
@@ -387,7 +382,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
             try
             {
-                IWallet wallet = this.walletManager.GetWallet(request.Name);
+                IWallet wallet = this.walletService.GetWallet(request.Name);
 
                 var model = new WalletGeneralInfoModel
                 {
@@ -401,11 +396,12 @@ namespace Stratis.Features.Wallet.Api.Controllers
                 };
 
                 // Get the wallet's file path.
-                (string folder, IEnumerable<string> fileNameCollection) = this.walletManager.GetWalletsFiles();
-                string searchFile = Path.ChangeExtension(request.Name, this.walletManager.GetWalletFileExtension());
-                string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
-                if (folder != null && fileName != null)
-                    model.WalletFilePath = Path.Combine(folder, fileName);
+                //TODO: commented because I'm not sure we need this and anyway would be valid only for JSON wallets
+                //(string folder, IEnumerable<string> fileNameCollection) = this.walletManager.GetWalletsFiles();
+                //string searchFile = Path.ChangeExtension(request.Name, this.walletManager.GetWalletFileExtension());
+                //string fileName = fileNameCollection.FirstOrDefault(i => i.Equals(searchFile));
+                //if (folder != null && fileName != null)
+                //    model.WalletFilePath = Path.Combine(folder, fileName);
 
                 return this.Json(model);
             }
@@ -438,7 +434,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
                 var model = new WalletHistoryModel();
 
                 // Get a list of all the transactions found in an account (or in a wallet if no account is specified), with the addresses associated with them.
-                IEnumerable<AccountHistory> accountsHistory = this.walletManager.GetHistory(request.WalletName, request.AccountName);
+                IEnumerable<AccountHistory> accountsHistory = this.walletService.GetHistory(request.WalletName, request.AccountName);
 
                 foreach (AccountHistory accountHistory in accountsHistory)
                 {
@@ -628,7 +624,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
             {
                 var model = new WalletBalanceModel();
 
-                IEnumerable<AccountBalance> balances = this.walletManager.GetBalances(request.WalletName, request.AccountName);
+                IEnumerable<AccountBalance> balances = this.walletService.GetBalances(request.WalletName, request.AccountName);
 
                 foreach (AccountBalance balance in balances)
                 {
@@ -1008,7 +1004,7 @@ namespace Stratis.Features.Wallet.Api.Controllers
 
             try
             {
-                HdAccount result = this.walletManager.GetUnusedAccount(request.WalletName, request.Password);
+                HdAccount result = this.walletService.GetUnusedAccount(request.WalletName, request.Password);
                 return this.Json(result.Name);
             }
             catch (CannotAddAccountToXpubKeyWalletException e)
@@ -1365,19 +1361,6 @@ namespace Stratis.Features.Wallet.Api.Controllers
             {
                 this.logger.LogError("Exception occurred: {0}", e.ToString());
                 return ErrorHelpers.BuildErrorResponse(HttpStatusCode.BadRequest, e.Message, e.ToString());
-            }
-        }
-
-        private void SyncFromBestHeightForRecoveredWallets(DateTime walletCreationDate)
-        {
-            // After recovery the wallet needs to be synced.
-            // We only sync if the syncing process needs to go back.
-            int blockHeightToSyncFrom = this.chainIndexer.GetHeightAtTime(walletCreationDate);
-            int currentSyncingHeight = this.walletSyncManager.WalletTip.Height;
-
-            if (blockHeightToSyncFrom < currentSyncingHeight)
-            {
-                this.walletSyncManager.SyncFromHeight(blockHeightToSyncFrom);
             }
         }
     }

@@ -60,66 +60,11 @@ namespace Stratis.Features.Wallet
         void DeleteWallet();
 
         /// <summary>
-        /// Gets an address that contains no transaction.
-        /// </summary>
-        /// <param name="accountReference">The name of the wallet and account</param>
-        /// <returns>An unused address or a newly created address, in Base58 format.</returns>
-        HdAddress GetUnusedAddress(WalletAccountReference accountReference);
-
-        /// <summary>
         /// Gets the first change address that contains no transaction.
         /// </summary>
         /// <param name="accountReference">The name of the wallet and account.</param>
         /// <returns>An unused change address or a newly created change address, in Base58 format.</returns>
         HdAddress GetUnusedChangeAddress(WalletAccountReference accountReference);
-
-        /// <summary>
-        /// Gets a collection of unused receiving or change addresses.
-        /// </summary>
-        /// <param name="accountReference">The name of the wallet and account.</param>
-        /// <param name="count">The number of addresses to create.</param>
-        /// <param name="isChange">A value indicating whether or not the addresses to get should be receiving or change addresses.</param>
-        /// <returns>A list of unused addresses. New addresses will be created as necessary.</returns>
-        IEnumerable<HdAddress> GetUnusedAddresses(WalletAccountReference accountReference, int count, bool isChange = false);
-
-        /// <summary>
-        /// Gets the history of transactions contained in an account.
-        /// If no account name is specified, history will be returned for all accounts in the wallet.
-        /// </summary>
-        /// <param name="walletName">The wallet name.</param>
-        /// <param name="accountName">The account name.</param>
-        /// <returns>Collection of address history and transaction pairs.</returns>
-        IEnumerable<AccountHistory> GetHistory(string walletName, string accountName = null);
-
-        /// <summary>
-        /// Gets the history of the transactions in addresses contained in this account.
-        /// </summary>
-        /// <param name="account">The account for which to get history.</param>
-        /// <returns>The history for this account.</returns>
-        AccountHistory GetHistory(HdAccount account);
-
-        /// <summary>
-        /// Gets the balance of transactions contained in an account.
-        /// If no account name is specified, balances will be returned for all accounts in the wallet.
-        /// </summary>
-        /// <param name="walletName">The wallet name.</param>
-        /// <param name="accountName">The account name.</param>
-        /// <returns>Collection of account balances.</returns>
-        IEnumerable<AccountBalance> GetBalances(string walletName, string accountName = null);
-
-        /// <summary>
-        /// Gets the balance of transactions for this specific address.
-        /// </summary>
-        /// <param name="address">The address to get the balance from.</param>
-        /// <returns>The address balance for an address.</returns>
-        AddressBalance GetAddressBalance(string address);
-
-        /// <summary>
-        /// Gets some general information about a wallet.
-        /// </summary>
-        /// <param name="walletName">The name of the wallet.</param>
-        /// <returns>The required wallet.</returns>
-        IWallet GetWallet(string walletName);
 
         /// <summary>
         /// Gets a list of accounts.

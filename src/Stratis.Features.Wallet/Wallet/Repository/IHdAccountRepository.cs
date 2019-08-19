@@ -20,8 +20,9 @@ namespace Stratis.Features.Wallet.Repository
         /// <summary>
         /// Gets the first account that contains no transaction.
         /// </summary>
+        /// <param name="walletName">The wallet name.</param>
         /// <returns>An unused account</returns>
-        HdAccount GetFirstUnusedAccount();
+        HdAccount GetFirstUnusedAccount(string walletName);
 
         /// <summary>
         /// Gets the wallet accounts.

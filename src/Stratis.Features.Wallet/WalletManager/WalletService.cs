@@ -51,8 +51,10 @@ namespace Stratis.Features.Wallet
         /// <summary>The chain of headers.</summary>
         protected readonly ChainIndexer chainIndexer;
 
+        protected readonly IWalletStore walletStore;
+
         public WalletService(LoggerFactory loggerFactory, Network network, IDateTimeProvider dateTimeProvider, ISignals signals, ChainIndexer chainIndexer,
-            IWalletUnitOfWork walletUnitOfWork, WalletSettings walletSettings, IWalletLockTracker walletLockTracker, IHdAddressLookup hdAddressLookup)
+            IWalletUnitOfWork walletUnitOfWork, WalletSettings walletSettings, IWalletLockTracker walletLockTracker, IHdAddressLookup hdAddressLookup, IWalletStore walletStore)
         {
             this.logger = Guard.NotNull(loggerFactory, nameof(loggerFactory)).CreateLogger(this.GetType().FullName);
 
@@ -64,6 +66,7 @@ namespace Stratis.Features.Wallet
             this.walletSettings = Guard.NotNull(walletSettings, nameof(walletSettings));
             this.walletLockTracker = Guard.NotNull(walletLockTracker, nameof(walletLockTracker));
             this.hdAddressLookup = Guard.NotNull(hdAddressLookup, nameof(hdAddressLookup));
+            this.walletStore = Guard.NotNull(walletStore, nameof(walletStore));
 
             this.coinType = (CoinType)network.Consensus.CoinType;
         }
@@ -346,21 +349,20 @@ namespace Stratis.Features.Wallet
                 throw new CannotAddAccountToXpubKeyWalletException("Use recover-via-extpubkey instead.");
             }
 
-            HdAccount account = null;
-
-            account = wallet.GetFirstUnusedAccount();
-
+            HdAccount account = this.walletUnitOfWork.HdAccountRepository.GetFirstUnusedAccount(walletName);
             if (account != null)
             {
                 this.logger.LogTrace("(-)[ACCOUNT_FOUND]");
                 return account;
             }
-
-            using (var uowSession = this.walletUnitOfWork.Begin())
+            else
             {
-                // No unused account was found, create a new one.
-                account = CreateWalletAccount(wallet, password);
-                this.OnWalletAccountCreated(wallet, account);
+                using (var uowSession = this.walletUnitOfWork.Begin())
+                {
+                    // No unused account was found, create a new one.
+                    account = CreateWalletAccount(wallet, password);
+                    this.OnWalletAccountCreated(wallet, account);
+                }
             }
 
             return account;
@@ -434,6 +436,122 @@ namespace Stratis.Features.Wallet
             unspentOutputs = wallet.GetAllSpendableTransactions(this.chainIndexer.Tip.Height, confirmations, accountFilter).ToArray();
 
             return unspentOutputs;
+        }
+
+        /// <inheritdoc />
+        public IWallet GetWallet(string walletName)
+        {
+            Guard.NotEmpty(walletName, nameof(walletName));
+
+            IWallet wallet = this.walletUnitOfWork.WalletRepository.GetByName(walletName);
+
+            return wallet;
+        }
+
+
+        /// <inheritdoc />
+        public IEnumerable<AccountHistory> GetHistory(string walletName, string accountName = null)
+        {
+            Guard.NotEmpty(walletName, nameof(walletName));
+
+            // In order to calculate the fee properly we need to retrieve all the transactions with spending details.
+            IWallet wallet = this.GetWalletByName(walletName);
+
+
+            var accounts = new List<HdAccount>();
+            if (!string.IsNullOrEmpty(accountName))
+            {
+                HdAccount account = this.GetAccountByName(wallet, accountName);
+                accounts.Add(account);
+            }
+            else
+            {
+                IEnumerable<HdAccount> walletAccounts = this.walletUnitOfWork.HdAccountRepository.GetWalletAccounts(walletName).Where(AccountFilters.NormalAccounts);
+                accounts.AddRange(walletAccounts);
+            }
+
+            IEnumerable<AccountHistory> accountsHistory = this.walletStore.GetHistory(walletName, accounts);
+
+            return accountsHistory;
+        }
+
+        /// <inheritdoc />
+        public IEnumerable<AccountBalance> GetBalances(string walletName, string accountName = null)
+        {
+            IWallet wallet = this.GetWalletByName(walletName);
+
+            var accounts = new List<HdAccount>();
+            if (!string.IsNullOrEmpty(accountName))
+            {
+                HdAccount account = this.GetAccountByName(wallet, accountName);
+                accounts.Add(account);
+            }
+            else
+            {
+                IEnumerable<HdAccount> walletAccounts = this.walletUnitOfWork.HdAccountRepository.GetWalletAccounts(walletName).Where(AccountFilters.NormalAccounts);
+                accounts.AddRange(walletAccounts);
+            }
+
+            IEnumerable<AccountBalance> balances = this.walletStore.GetBalances(walletName, accounts);
+
+            return balances;
+        }
+
+        /// <inheritdoc />
+        public AddressBalance GetAddressBalance(string address)
+        {
+            Guard.NotEmpty(address, nameof(address));
+
+            AddressBalance balance = this.walletStore.GetAddressBalance(address);
+
+            return balance;
+        }
+
+        /// <inheritdoc />
+        public HdAddress GetUnusedAddress(WalletAccountReference accountReference)
+        {
+            HdAddress res = this.GetUnusedAddresses(accountReference, 1).Single();
+
+            return res;
+        }
+
+        /// <inheritdoc />
+        public IEnumerable<HdAddress> GetUnusedAddresses(WalletAccountReference accountReference, int count, bool isChange = false)
+        {
+            Guard.NotNull(accountReference, nameof(accountReference));
+            Guard.Assert(count > 0);
+
+            IWallet wallet = this.GetWalletByName(accountReference.WalletName);
+
+            bool generated = false;
+            IEnumerable<HdAddress> addresses;
+
+
+            // Get the account.
+            HdAccount account = this.GetAccountByName(wallet, accountReference.AccountName);
+
+            List<HdAddress> unusedAddresses = isChange ?
+                account.InternalAddresses.Where(acc => !acc.Transactions.Any()).ToList() :
+                account.ExternalAddresses.Where(acc => !acc.Transactions.Any()).ToList();
+
+            int diff = unusedAddresses.Count - count;
+            var newAddresses = new List<HdAddress>();
+            if (diff < 0)
+            {
+                newAddresses = account.CreateAddresses(this.network, Math.Abs(diff), isChange: isChange).ToList();
+                this.UpdateKeysLookupLocked(newAddresses);
+                generated = true;
+            }
+
+            addresses = unusedAddresses.Concat(newAddresses).OrderBy(x => x.Index).Take(count);
+
+            if (generated)
+            {
+                // Save the changes to the file.
+                this.SaveWallet(wallet);
+            }
+
+            return addresses;
         }
 
         /// <summary>
