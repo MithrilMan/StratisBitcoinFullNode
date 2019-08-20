@@ -55,5 +55,10 @@ namespace Stratis.Features.Wallet
         {
             return new ScriptToAddressLookup();
         }
+
+        public IEnumerable<HdAddress> GetTrackedAddresses()
+        {
+            return this.scriptToAddressLookup.Values.ToList();
+        }
     }
 }

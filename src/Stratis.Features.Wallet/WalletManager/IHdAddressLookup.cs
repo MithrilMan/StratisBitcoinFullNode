@@ -15,5 +15,11 @@ namespace Stratis.Features.Wallet
         /// </summary>
         /// <param name="addresses">The addresses to track.</param>
         void TrackAddresses(IEnumerable<HdAddress> addresses);
+
+        /// <summary>
+        /// Gets the snapshot of the tracked addresses.
+        /// </summary>
+        /// <returns>The list of tracked addresses</returns>
+        IEnumerable<HdAddress> GetTrackedAddresses();
     }
 }

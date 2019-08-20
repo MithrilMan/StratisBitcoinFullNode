@@ -70,23 +70,10 @@ namespace Stratis.Features.Wallet
         void SetLastBlockDetails(ChainedHeader block);
 
         /// <summary>
-        /// Gets all the transactions in the wallet.
-        /// </summary>
-        /// <returns>A list of all the transactions in the wallet.</returns>
-        IEnumerable<TransactionData> GetAllTransactions();
-
-        /// <summary>
         /// Gets all the pub keys contained in this wallet.
         /// </summary>
         /// <returns>A list of all the public keys contained in the wallet.</returns>
         IEnumerable<Script> GetAllPubKeys();
-
-        /// <summary>
-        /// Gets all the addresses contained in this wallet.
-        /// </summary>
-        /// <param name="accountFilter">An optional filter for filtering the accounts being returned.</param>
-        /// <returns>A list of all the addresses contained in this wallet.</returns>
-        IEnumerable<HdAddress> GetAllAddresses(Func<HdAccount, bool> accountFilter = null);
 
         /// <summary>
         /// Adds an account to the current wallet.

@@ -45,33 +45,9 @@ namespace Stratis.Features.Wallet
         IEnumerable<BuilderExtension> GetTransactionBuilderExtensionsForStaking();
 
         /// <summary>
-        /// Lists all spendable transactions from the account specified in <see cref="WalletAccountReference" />.
-        /// </summary>
-        /// <param name="walletAccountReference">The wallet account reference.</param>
-        /// <param name="confirmations">The confirmations.</param>
-        /// <returns>
-        /// A collection of spendable outputs that belong to the given account.
-        /// </returns>
-        IEnumerable<UnspentOutputReference> GetSpendableTransactionsInAccount(WalletAccountReference walletAccountReference, int confirmations = 0);
-
-        /// <summary>
         /// Deletes a wallet.
         /// </summary>
         void DeleteWallet();
-
-        /// <summary>
-        /// Gets the first change address that contains no transaction.
-        /// </summary>
-        /// <param name="accountReference">The name of the wallet and account.</param>
-        /// <returns>An unused change address or a newly created change address, in Base58 format.</returns>
-        HdAddress GetUnusedChangeAddress(WalletAccountReference accountReference);
-
-        /// <summary>
-        /// Gets a list of accounts.
-        /// </summary>
-        /// <param name="walletName">The name of the wallet to look into.</param>
-        /// <returns>The list of wallet accounts.</returns>
-        IEnumerable<HdAccount> GetAccounts(string walletName);
 
         /// <summary>
         /// Gets the last block height.
@@ -121,23 +97,10 @@ namespace Stratis.Features.Wallet
         HashHeightPair LastReceivedBlockInfo();
 
         /// <summary>
-        /// Gets a wallet given its name.
-        /// </summary>
-        /// <param name="walletName">The name of the wallet to get.</param>
-        /// <returns>A wallet or null if it doesn't exist</returns>
-        IWallet GetWalletByName(string walletName);
-
-        /// <summary>
         /// Gets the block locator of the first loaded wallet.
         /// </summary>
         /// <returns></returns>
         ICollection<uint256> GetFirstWalletBlockLocator();
-
-        /// <summary>
-        /// Gets the list of the wallet filenames, along with the folder in which they're contained.
-        /// </summary>
-        /// <returns>The wallet filenames, along with the folder in which they're contained.</returns>
-        (string folderPath, IEnumerable<string>) GetWalletsFiles();
 
         /// <summary>
         /// Gets whether there are any wallet files loaded or not.

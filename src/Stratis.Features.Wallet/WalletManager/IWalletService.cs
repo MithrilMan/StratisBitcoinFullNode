@@ -24,22 +24,22 @@ namespace Stratis.Features.Wallet
         /// Recovers a wallet using mnemonic and password.
         /// </summary>
         /// <param name="password">The user's password.</param>
-        /// <param name="name">The name of the wallet.</param>
+        /// <param name="walletName">The name of the wallet.</param>
         /// <param name="mnemonic">The user's mnemonic for the wallet.</param>
         /// <param name="creationTime">The date and time this wallet was created.</param>
         /// <param name="passphrase">The passphrase used in the seed.</param>
         /// <returns>The recovered wallet.</returns>
-        IWallet RecoverWallet(string password, string name, string mnemonic, DateTime creationTime, string passphrase = null);
+        IWallet RecoverWallet(string password, string walletName, string mnemonic, DateTime creationTime, string passphrase = null);
 
         /// <summary>
         /// Recovers a wallet using extended public key and account index.
         /// </summary>
-        /// <param name="name">The name of the wallet.</param>
+        /// <param name="walletName">The name of the wallet.</param>
         /// <param name="extPubKey">The extended public key.</param>
         /// <param name="accountIndex">The account number.</param>
         /// <param name="creationTime">The date and time this wallet was created.</param>
         /// <returns>The recovered wallet.</returns>
-        IWallet RecoverWallet(string name, ExtPubKey extPubKey, int accountIndex, DateTime creationTime);
+        IWallet RecoverWallet(string walletName, ExtPubKey extPubKey, int accountIndex, DateTime creationTime);
 
         /// <summary>
         /// Signs a string message.
@@ -112,16 +112,25 @@ namespace Stratis.Features.Wallet
         /// </summary>
         /// <param name="walletName">Name of the wallet.</param>
         /// <returns>Both internal and external wallet addresses.</returns>
-        IEnumerable<HdAddress> GetAllWalletAddresses(string walletName);
+        IEnumerable<HdAddress> GetAllAddresses(string walletName);
 
         /// <summary>
-        /// Gets all wallet transactions.
+        /// Gets all wallet transactions that are unspent or spent but with 0 confirmations.
         /// </summary>
         /// <param name="walletName">Name of the wallet.</param>
         /// <returns>
         /// List of wallet related transactions.
         /// </returns>
-        IEnumerable<TransactionData> GetAllWalletTransactions(string walletName);
+        IEnumerable<TransactionData> GetAllUnspentTransactions(string walletName);
+
+        /// <summary>
+        /// Gets all the pub keys contained in this wallet.
+        /// </summary>
+        /// <param name="walletName">Name of the wallet.</param>
+        /// <returns>
+        /// A list of all the public keys contained in the wallet.
+        /// </returns>
+        IEnumerable<Script> GetAllPubKeys(string walletName);
 
         /// <summary>
         /// Gets an account that contains no transactions.
@@ -209,6 +218,7 @@ namespace Stratis.Features.Wallet
         AddressBalance GetAddressBalance(string address);
 
         /// <summary>
+        /// TODO: this has to be renamed to GetUnusedExternalAddress once refactor is complete
         /// Gets an address that contains no transaction.
         /// </summary>
         /// <param name="accountReference">The name of the wallet and account</param>
@@ -216,12 +226,43 @@ namespace Stratis.Features.Wallet
         HdAddress GetUnusedAddress(WalletAccountReference accountReference);
 
         /// <summary>
+        /// /// TODO: this has to be renamed to GetUnusedInternalAddress once refactor is complete
+        /// Gets the first change address that contains no transaction.
+        /// </summary>
+        /// <param name="accountReference">The name of the wallet and account.</param>
+        /// <returns>An unused change address or a newly created change address, in Base58 format.</returns>
+        HdAddress GetUnusedChangeAddress(WalletAccountReference accountReference);
+
+        /// <summary>
         /// Gets a collection of unused receiving or change addresses.
         /// </summary>
         /// <param name="accountReference">The name of the wallet and account.</param>
-        /// <param name="count">The number of addresses to create.</param>
-        /// <param name="isChange">A value indicating whether or not the addresses to get should be receiving or change addresses.</param>
+        /// <param name="count">The number of addresses to retrieve.</param>
+        /// <param name="isInternalAddress">A value indicating whether or not the addresses to get should be internal or external addresses.</param>
         /// <returns>A list of unused addresses. New addresses will be created as necessary.</returns>
-        IEnumerable<HdAddress> GetUnusedAddresses(WalletAccountReference accountReference, int count, bool isChange = false);
+        IEnumerable<HdAddress> GetUnusedAddresses(WalletAccountReference accountReference, int count, bool isInternalAddress = false);
+
+        /// <summary>
+        /// Gets a list of accounts.
+        /// </summary>
+        /// <param name="walletName">The name of the wallet to look into.</param>
+        /// <returns>The list of wallet accounts.</returns>
+        IEnumerable<HdAccount> GetAccounts(string walletName);
+
+        /// <summary>
+        /// Lists all spendable transactions from the account specified in <see cref="WalletAccountReference" />.
+        /// </summary>
+        /// <param name="walletAccountReference">The wallet account reference.</param>
+        /// <param name="confirmations">The confirmations.</param>
+        /// <returns>
+        /// A collection of spendable outputs that belong to the given account.
+        /// </returns>
+        IEnumerable<UnspentOutputReference> GetSpendableTransactionsInAccount(WalletAccountReference walletAccountReference, int confirmations = 0);
+
+        /// <summary>
+        /// Rewinds all the wallets at the specified height.
+        /// </summary>
+        /// <param name="height">The height.</param>
+        void Rewind(int height);
     }
 }

@@ -114,44 +114,6 @@ namespace Stratis.Features.Wallet
         }
 
         /// <summary>
-        /// Gets all the transactions in the wallet.
-        /// </summary>
-        /// <returns>A list of all the transactions in the wallet.</returns>
-        public IEnumerable<TransactionData> GetAllTransactions()
-        {
-            List<HdAccount> accounts = this.GetAccounts().ToList();
-
-            foreach (TransactionData txData in accounts.SelectMany(x => x.ExternalAddresses).SelectMany(x => x.Transactions))
-            {
-                yield return txData;
-            }
-
-            foreach (TransactionData txData in accounts.SelectMany(x => x.InternalAddresses).SelectMany(x => x.Transactions))
-            {
-                yield return txData;
-            }
-        }
-
-        /// <summary>
-        /// Gets all the pub keys contained in this wallet.
-        /// </summary>
-        /// <returns>A list of all the public keys contained in the wallet.</returns>
-        public IEnumerable<Script> GetAllPubKeys()
-        {
-            List<HdAccount> accounts = this.GetAccounts().ToList();
-
-            foreach (Script script in accounts.SelectMany(x => x.ExternalAddresses).Select(x => x.ScriptPubKey))
-            {
-                yield return script;
-            }
-
-            foreach (Script script in accounts.SelectMany(x => x.InternalAddresses).Select(x => x.ScriptPubKey))
-            {
-                yield return script;
-            }
-        }
-
-        /// <summary>
         /// Gets all the addresses contained in this wallet.
         /// </summary>
         /// <param name="accountFilter">An optional filter for filtering the accounts being returned.</param>

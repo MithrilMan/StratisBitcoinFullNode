@@ -213,35 +213,10 @@ namespace Stratis.Features.Wallet
                 this.broadcasterManager.TransactionStateChanged -= this.BroadcasterManager_TransactionStateChanged;
         }
 
-
-
-        /// <inheritdoc />
-        public HdAddress GetUnusedChangeAddress(WalletAccountReference accountReference)
-        {
-            HdAddress res = this.GetUnusedAddresses(accountReference, 1, true).Single();
-
-            return res;
-        }
-
-        /// <inheritdoc />
-        public IEnumerable<HdAccount> GetAccounts(string walletName)
-        {
-            Guard.NotEmpty(walletName, nameof(walletName));
-
-            Wallet wallet = this.GetWalletByName(walletName);
-
-            HdAccount[] res = null;
-            lock (this.lockObject)
-            {
-                res = wallet.GetAccounts().ToArray();
-            }
-            return res;
-        }
-
         /// <inheritdoc />
         public int LastBlockHeight()
         {
-            if (!this.Wallets.Any())
+            if (!this.loadedWallets.Any())
             {
                 int height = this.chainIndexer.Tip.Height;
                 this.logger.LogTrace("(-)[NO_WALLET]:{0}", height);
@@ -251,14 +226,14 @@ namespace Stratis.Features.Wallet
             int res;
             lock (this.lockObject)
             {
-                res = this.Wallets.Min(w => w.AccountsRoot.Single().LastBlockSyncedHeight) ?? 0;
+                res = this.loadedWallets.Min(w => w.AccountsRoot.Single().LastBlockSyncedHeight) ?? 0;
             }
 
             return res;
         }
 
         /// <inheritdoc />
-        public bool ContainsWallets => this.Wallets.Any();
+        public bool ContainsWallets => this.loadedWallets.Any();
 
         /// <summary>
         /// Gets the hash of the last block received by the wallets.
@@ -266,7 +241,7 @@ namespace Stratis.Features.Wallet
         /// <returns>Hash of the last block received by the wallets.</returns>
         public HashHeightPair LastReceivedBlockInfo()
         {
-            if (!this.Wallets.Any())
+            if (!this.loadedWallets.Any())
             {
                 ChainedHeader chainedHeader = this.chainIndexer.Tip;
                 this.logger.LogTrace("(-)[NO_WALLET]:'{0}'", chainedHeader);
@@ -276,48 +251,14 @@ namespace Stratis.Features.Wallet
             AccountRoot accountRoot;
             lock (this.lockObject)
             {
-                accountRoot = this.Wallets
+                accountRoot = this.loadedWallets
                     .Select(w => w.AccountsRoot.Single())
                     .Where(w => w != null)
                     .OrderBy(o => o.LastBlockSyncedHeight)
                     .FirstOrDefault();
-
-                // If details about the last block synced are not present in the wallet,
-                // find out which is the oldest wallet and set the last block synced to be the one at this date.
-                if (accountRoot == null || accountRoot.LastBlockSyncedHash == null)
-                {
-                    this.logger.LogWarning("There were no details about the last block synced in the wallets.");
-                    DateTimeOffset earliestWalletDate = this.Wallets.Min(c => c.CreationTime);
-                    this.UpdateWhenChainDownloaded(this.Wallets, earliestWalletDate.DateTime);
-                    return new HashHeightPair(this.chainIndexer.Tip);
-                }
             }
 
             return new HashHeightPair(accountRoot.LastBlockSyncedHash, accountRoot.LastBlockSyncedHeight.Value);
-        }
-
-        /// <inheritdoc />
-        public IEnumerable<UnspentOutputReference> GetSpendableTransactionsInAccount(WalletAccountReference walletAccountReference, int confirmations = 0)
-        {
-            Guard.NotNull(walletAccountReference, nameof(walletAccountReference));
-
-            Wallet wallet = this.GetWalletByName(walletAccountReference.WalletName);
-            UnspentOutputReference[] res = null;
-            lock (this.lockObject)
-            {
-                HdAccount account = wallet.GetAccount(walletAccountReference.AccountName);
-
-                if (account == null)
-                {
-                    this.logger.LogTrace("(-)[ACT_NOT_FOUND]");
-                    throw new WalletException(
-                        $"Account '{walletAccountReference.AccountName}' in wallet '{walletAccountReference.WalletName}' not found.");
-                }
-
-                res = account.GetSpendableTransactions(this.chainIndexer.Tip.Height, this.network.Consensus.CoinbaseMaturity, confirmations).ToArray();
-            }
-
-            return res;
         }
 
         /// <inheritdoc />
@@ -327,18 +268,10 @@ namespace Stratis.Features.Wallet
 
             lock (this.lockObject)
             {
-                IEnumerable<HdAddress> allAddresses = this.scriptToAddressLookup.Values;
+                IEnumerable<HdAddress> allAddresses = this.hdAddressLookup.GetTrackedAddresses();
                 foreach (HdAddress address in allAddresses)
                 {
-                    // Remove all the UTXO that have been reorged.
-                    IEnumerable<TransactionData> makeUnspendable = address.Transactions.Where(w => w.BlockHeight > fork.Height).ToList();
-                    foreach (TransactionData transactionData in makeUnspendable)
-                        address.Transactions.Remove(transactionData);
-
-                    // Bring back all the UTXO that are now spendable after the reorg.
-                    IEnumerable<TransactionData> makeSpendable = address.Transactions.Where(w => (w.SpendingDetails != null) && (w.SpendingDetails.BlockHeight > fork.Height));
-                    foreach (TransactionData transactionData in makeSpendable)
-                        transactionData.SpendingDetails = null;
+                    this.walletService.Rewind(fork.Height);
                 }
 
                 this.UpdateLastBlockSyncedHeight(fork);
@@ -355,7 +288,7 @@ namespace Stratis.Features.Wallet
             Guard.NotNull(chainedHeader, nameof(chainedHeader));
 
             // If there is no wallet yet, update the wallet tip hash and do nothing else.
-            if (!this.Wallets.Any())
+            if (!this.loadedWallets.Any())
             {
                 this.WalletTipHash = chainedHeader.HashBlock;
                 this.WalletTipHeight = chainedHeader.Height;
@@ -746,12 +679,10 @@ namespace Stratis.Features.Wallet
             {
                 foreach (IWallet wallet in this.loadedWallets)
                 {
-                    IEnumerable<HdAddress> walletAddresses = this.walletService.GetAllWalletAddresses(wallet.Name);
+                    IEnumerable<HdAddress> walletAddresses = this.walletService.GetAllAddresses(wallet.Name);
                     this.hdAddressLookup.TrackAddresses(walletAddresses);
 
-                    IEnumerable<TransactionData> walletTransactions = this.walletService.GetAllWalletTransactions(wallet.Name);
-                    this.hdAddressLookup.TrackAddresses(walletAddresses);
-
+                    IEnumerable<TransactionData> walletTransactions = this.walletService.GetAllTransactions(wallet.Name);
                     foreach (TransactionData transaction in walletTransactions)
                     {
                         // Get the UTXOs that are unspent or spent but not confirmed.
@@ -811,16 +742,13 @@ namespace Stratis.Features.Wallet
             {
                 this.outpointLookup.Clear();
 
-                foreach (Wallet wallet in this.loadedWallets)
+                foreach (IWallet wallet in this.loadedWallets)
                 {
-                    foreach (HdAddress address in wallet.GetAllAddresses(a => true))
+                    // Get the UTXOs that are unspent or spent but not confirmed.
+                    // We only exclude from the list the confirmed spent UTXOs.
+                    foreach (TransactionData transaction in this.walletService.GetAllUnspentTransactions(wallet.Name))
                     {
-                        // Get the UTXOs that are unspent or spent but not confirmed.
-                        // We only exclude from the list the confirmed spent UTXOs.
-                        foreach (TransactionData transaction in address.Transactions.Where(t => t.SpendingDetails?.BlockHeight == null))
-                        {
-                            this.outpointLookup.Add(transaction);
-                        }
+                        this.outpointLookup.Add(transaction);
                     }
                 }
             }
@@ -859,38 +787,25 @@ namespace Stratis.Features.Wallet
         /// <inheritdoc />
         public IEnumerable<string> GetWalletsNames()
         {
-            return this.Wallets.Select(w => w.Name);
-        }
-
-        /// <inheritdoc />
-        public Wallet GetWalletByName(string walletName)
-        {
-            Wallet wallet = this.Wallets.SingleOrDefault(w => w.Name == walletName);
-            if (wallet == null)
-            {
-                this.logger.LogTrace("(-)[WALLET_NOT_FOUND]");
-                throw new WalletException($"No wallet with name '{walletName}' could be found.");
-            }
-
-            return wallet;
+            return this.loadedWallets.Select(w => w.Name);
         }
 
         /// <inheritdoc />
         public ICollection<uint256> GetFirstWalletBlockLocator()
         {
-            return this.Wallets.First().BlockLocator;
+            return this.loadedWallets.First().BlockLocator;
         }
 
         /// <inheritdoc />
         public int? GetEarliestWalletHeight()
         {
-            return this.Wallets.Min(w => w.AccountsRoot.Single().LastBlockSyncedHeight);
+            return this.loadedWallets.Min(w => w.AccountsRoot.Single().LastBlockSyncedHeight);
         }
 
         /// <inheritdoc />
         public DateTimeOffset GetOldestWalletCreationTime()
         {
-            return this.Wallets.Min(w => w.CreationTime);
+            return this.loadedWallets.Min(w => w.CreationTime);
         }
 
         /// <summary>
