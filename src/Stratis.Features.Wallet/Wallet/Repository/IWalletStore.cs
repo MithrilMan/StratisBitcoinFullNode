@@ -111,9 +111,9 @@ namespace Stratis.Features.Wallet.Repository
         /// <summary>
         /// Adds the addresses to the store.
         /// </summary>
-        /// <param name="account">The account that own the addresses.</param>
+        /// <param name="accountReference">The name of the wallet and account.</param>
         /// <param name="addressesToAdd">The addresses to add.</param>
-        void AddAddress(HdAccount account, IEnumerable<HdAddress> addressesToAdd);
+        void AddAddress(WalletAccountReference accountReference, IEnumerable<HdAddress> addressesToAdd);
 
         /// <summary>
         /// Finds the HD address for the address.
@@ -121,9 +121,15 @@ namespace Stratis.Features.Wallet.Repository
         /// <remarks>
         /// Returns an HDAddress.
         /// </remarks>
+        /// <param name="walletName">Name of the wallet.</param>
         /// <param name="address">An address.</param>
         /// <returns>HD Address</returns>
-        HdAddress GetAddress(string address);
+        HdAddress GetAddress(string walletName, string address);
+
+        /// <param name="accountReference">The name of the wallet and account.</param>
+        /// <param name="isInternalAddress">A value indicating whether or not the addresses to get should internal or external addresses.</param>
+        HdAddress GetLastUsedAddress(WalletAccountReference accountReference, bool isInternalAddress);
+
 
         /// <summary>
         /// Gets all wallet addresses.
@@ -141,7 +147,6 @@ namespace Stratis.Features.Wallet.Repository
         /// </returns>
         IEnumerable<Script> GetAllPubKeys(string walletName);
 
-        void Add(IEnumerable<HdAddress> newReceivingAddresses);
         #endregion
 
         #region Transaction
@@ -189,9 +194,10 @@ namespace Stratis.Features.Wallet.Repository
         /// <summary>
         /// Gets the balance of transactions for this specific address.
         /// </summary>
+        /// <param name="walletName">The wallet name.</param>
         /// <param name="address">The address to get the balance from.</param>
         /// <returns>The address balance for an address.</returns>
-        AddressBalance GetAddressBalance(string address);
+        AddressBalance GetAddressBalance(string walletName, string address);
 
         /// <summary>
         /// Gets a collection of unused receiving or change addresses.

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBitcoin.BuilderExtensions;
@@ -312,6 +313,10 @@ namespace Stratis.Features.Wallet
 
             lock (this.lockObject)
             {
+                IEnumerable<Transaction> newWalletTransactions = this.GetTransactionsThatBelongsToWalletLocked(block, chainedHeader.Height);
+
+                //this.walletService
+
                 bool trxFoundInBlock = false;
                 foreach (Transaction transaction in block.Transactions)
                 {
@@ -333,6 +338,37 @@ namespace Stratis.Features.Wallet
                 }
             }
         }
+
+        /// <summary>
+        /// Returns the transactions that interact with our loaded wallets.
+        /// </summary>
+        /// <param name="block">The block to get transaction from.</param>
+        /// <param name="blockHeight">Height of the block.</param>
+        /// <returns></returns>
+        protected virtual IEnumerable<Transaction> GetTransactionsThatBelongsToWalletLocked(Block block, int blockHeight)
+        {
+            var rangePartitioner = Partitioner.Create(0, block.Transactions.Count);
+
+            List<Transaction> incomingTransactions = new List<Transaction>();
+            List<Transaction> outgoingTransactions = new List<Transaction>();
+            ParallelLoopResult parallelResult = Parallel.ForEach(rangePartitioner, (range, loopState) =>
+            {
+                for (int i = range.Item1; i < range.Item2; i++)
+                {
+                    if (loopState.IsExceptional || loopState.IsStopped)
+                    {
+                        break;
+                    }
+
+                    result.Add(outputs);
+                }
+            });
+
+            foreach (Transaction transaction in block.Transactions)
+            {
+            }
+        }
+
 
         /// <inheritdoc />
         public bool ProcessTransaction(Transaction transaction, int? blockHeight = null, Block block = null, bool isPropagated = true)

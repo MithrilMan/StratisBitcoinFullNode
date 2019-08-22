@@ -213,9 +213,10 @@ namespace Stratis.Features.Wallet
         /// <summary>
         /// Gets the balance of transactions for this specific address.
         /// </summary>
+        /// <param name="walletName">The wallet name.</param>
         /// <param name="address">The address to get the balance from.</param>
         /// <returns>The address balance for an address.</returns>
-        AddressBalance GetAddressBalance(string address);
+        AddressBalance GetAddressBalance(string walletName, string address);
 
         /// <summary>
         /// TODO: this has to be renamed to GetUnusedExternalAddress once refactor is complete

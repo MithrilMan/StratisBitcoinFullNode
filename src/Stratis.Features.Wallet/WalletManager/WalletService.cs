@@ -179,7 +179,7 @@ namespace Stratis.Features.Wallet
             // ensures wallet exists.
             IWallet wallet = this.GetWalletByName(walletName);
             // ensures address is a known wallet address.
-            HdAddress hdAddress = this.walletStore.GetAddress(address).ThrowIfNull();
+            HdAddress hdAddress = this.walletStore.GetAddress(walletName, address).ThrowIfNull();
 
             // get wallet seed
             Key seed = HdOperations.DecryptSeed(wallet.EncryptedSeed, password, this.network);
@@ -203,7 +203,7 @@ namespace Stratis.Features.Wallet
             Guard.NotEmpty(externalAddress, nameof(externalAddress));
 
             IWallet wallet = this.GetWalletByName(walletName);
-            HdAddress hdAddress = this.walletStore.GetAddress(externalAddress).ThrowIfNull();
+            HdAddress hdAddress = this.walletStore.GetAddress(walletName, externalAddress).ThrowIfNull();
 
             // get wallet seed
             Key seed = HdOperations.DecryptSeed(wallet.EncryptedSeed, password, this.network);
@@ -491,11 +491,11 @@ namespace Stratis.Features.Wallet
         }
 
         /// <inheritdoc />
-        public AddressBalance GetAddressBalance(string address)
+        public AddressBalance GetAddressBalance(string walletName, string address)
         {
             Guard.NotEmpty(address, nameof(address));
 
-            AddressBalance balance = this.walletStore.GetAddressBalance(address);
+            AddressBalance balance = this.walletStore.GetAddressBalance(walletName, address);
 
             return balance;
         }
@@ -626,16 +626,16 @@ namespace Stratis.Features.Wallet
         /// <summary>
         /// Fills both the internal and external address pool for a specific account.
         /// </summary>
-        /// <param name="account">The account.</param>
+        /// <param name="accountReference">The account.</param>
         /// <returns>New change and receiving address that has been generated.</returns>
-        private (IEnumerable<HdAddress> newChangeAddresses, IEnumerable<HdAddress> newReceivingAddresses) FillAddressPool(HdAccount account)
+        private (IEnumerable<HdAddress> newChangeAddresses, IEnumerable<HdAddress> newReceivingAddresses) FillAddressPool(WalletAccountReference accountReference)
         {
-            IEnumerable<HdAddress> newChangeAddresses = this.AddAddressesToMaintainBuffer(account, true);
-            this.walletStore.AddAddress(account, newChangeAddresses);
+            IEnumerable<HdAddress> newChangeAddresses = this.AddAddressesToMaintainBuffer(accountReference, true);
+            this.walletStore.AddAddress(accountReference, newChangeAddresses);
             this.hdAddressLookup.TrackAddresses(newChangeAddresses);
 
-            IEnumerable<HdAddress> newReceivingAddresses = this.AddAddressesToMaintainBuffer(account, false);
-            this.walletStore.AddAddress(account, newReceivingAddresses);
+            IEnumerable<HdAddress> newReceivingAddresses = this.AddAddressesToMaintainBuffer(accountReference, false);
+            this.walletStore.AddAddress(accountReference, newReceivingAddresses);
             this.hdAddressLookup.TrackAddresses(newReceivingAddresses);
 
             return (newChangeAddresses, newReceivingAddresses);
@@ -644,12 +644,12 @@ namespace Stratis.Features.Wallet
         /// <summary>
         /// Ensures that the specified account has enough available internal (when <paramref name="isInternal"/> is true) or external (when <paramref name="isInternal"/> is false) available addresses.
         /// </summary>
-        /// <param name="account">The account.</param>
+        /// <param name="accountReference">The name of the wallet and account</param>
         /// <param name="isInternal">Specifies the address set to check: internals (if set to <c>true</c>) or externals (if set to <c>false</c>).</param>
         /// <returns>List of created addresses to fill the internal/external addresses buffer.</returns>
-        private IEnumerable<HdAddress> AddAddressesToMaintainBuffer(HdAccount account, bool isInternal)
+        private IEnumerable<HdAddress> AddAddressesToMaintainBuffer(WalletAccountReference accountReference, bool isInternal)
         {
-            HdAddress lastUsedAddress = account.GetLastUsedAddress(isInternal);
+            HdAddress lastUsedAddress = this.walletStore.GetLastUsedAddress(accountReference, isInternal);
             int lastUsedAddressIndex = lastUsedAddress?.Index ?? -1;
             int addressesCount = isInternal ? account.InternalAddresses.Count() : account.ExternalAddresses.Count();
             int emptyAddressesCount = addressesCount - lastUsedAddressIndex - 1;
