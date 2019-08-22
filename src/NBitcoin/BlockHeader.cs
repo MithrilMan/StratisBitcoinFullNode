@@ -14,7 +14,7 @@ namespace NBitcoin
     /// </summary>
     public class BlockHeader : IBitcoinSerializable
     {
-        internal const int Size = 80;
+        public const int Size = 80;
 
         /// <summary>Current header version.</summary>
         public virtual int CurrentVersion => 3;
@@ -44,6 +44,8 @@ namespace NBitcoin
 
         protected uint256[] hashes;
 
+        public virtual long HeaderSize => Size;
+
         public DateTimeOffset BlockTime
         {
             get
@@ -56,26 +58,8 @@ namespace NBitcoin
             }
         }
 
+        [Obsolete("Please use the Load method outside of consensus.")]
         public BlockHeader()
-        {
-            this.SetNull();
-        }
-
-        public static BlockHeader Load(byte[] hex, Network network)
-        {
-            if (hex == null)
-                throw new ArgumentNullException(nameof(hex));
-
-            if (network == null)
-                throw new ArgumentNullException(nameof(network));
-
-            BlockHeader blockHeader = network.Consensus.ConsensusFactory.CreateBlockHeader();
-            blockHeader.ReadWrite(hex, network: network);
-
-            return blockHeader;
-        }
-
-        internal void SetNull()
         {
             this.version = this.CurrentVersion;
             this.hashPrevBlock = 0;
@@ -83,6 +67,20 @@ namespace NBitcoin
             this.time = 0;
             this.bits = 0;
             this.nonce = 0;
+        }
+
+        public static BlockHeader Load(byte[] bytes, Network network)
+        {
+            if (bytes == null)
+                throw new ArgumentNullException(nameof(bytes));
+
+            if (network == null)
+                throw new ArgumentNullException(nameof(network));
+
+            BlockHeader blockHeader = network.Consensus.ConsensusFactory.CreateBlockHeader();
+            blockHeader.ReadWrite(bytes, network.Consensus.ConsensusFactory);
+
+            return blockHeader;
         }
 
         #region IBitcoinSerializable Members
@@ -99,8 +97,19 @@ namespace NBitcoin
 
         #endregion
 
+        /// <summary>Populates stream with items that will be used during hash calculation.</summary>
+        protected virtual void ReadWriteHashingStream(BitcoinStream stream)
+        {
+            stream.ReadWrite(ref this.version);
+            stream.ReadWrite(ref this.hashPrevBlock);
+            stream.ReadWrite(ref this.hashMerkleRoot);
+            stream.ReadWrite(ref this.time);
+            stream.ReadWrite(ref this.bits);
+            stream.ReadWrite(ref this.nonce);
+        }
+
         /// <summary>
-        /// Generates the hash of a <see cref="BlockHeader"/>.
+        /// Generates the hash of a <see cref="BlockHeader"/> or uses cached one.
         /// </summary>
         /// <returns>A hash.</returns>
         public virtual uint256 GetHash()
@@ -116,7 +125,7 @@ namespace NBitcoin
 
             using (var hs = new HashStream())
             {
-                this.ReadWrite(new BitcoinStream(hs, true));
+                this.ReadWriteHashingStream(new BitcoinStream(hs, true));
                 hash = hs.GetHash();
             }
 
@@ -167,6 +176,7 @@ namespace NBitcoin
             return this.GetPoWHash() <= this.Bits.ToUInt256();
         }
 
+        /// <inheritdoc />
         public override string ToString()
         {
             return this.GetHash().ToString();
@@ -178,7 +188,7 @@ namespace NBitcoin
         /// <param name="now">The expected date.</param>
         /// <param name="consensus">Consensus.</param>
         /// <param name="prev">Previous block.</param>
-        public void UpdateTime(DateTimeOffset now, Consensus consensus, ChainedHeader prev)
+        public void UpdateTime(DateTimeOffset now, IConsensus consensus, ChainedHeader prev)
         {
             DateTimeOffset nOldTime = this.BlockTime;
             DateTimeOffset mtp = prev.GetMedianTimePast() + TimeSpan.FromSeconds(1);
@@ -208,7 +218,7 @@ namespace NBitcoin
             return this.GetWorkRequired(network.Consensus, prev);
         }
 
-        public Target GetWorkRequired(Consensus consensus, ChainedHeader prev)
+        public Target GetWorkRequired(IConsensus consensus, ChainedHeader prev)
         {
             return new ChainedHeader(this, this.GetHash(), prev).GetWorkRequired(consensus);
         }

@@ -119,6 +119,11 @@ namespace NBitcoin
         WitnessPubkeyType = (1U << 15),
 
         /// <summary>
+        /// This flag is set for POS when we reach the block height where cold staking is enabled.
+        /// </summary>
+        CheckColdStakeVerify = (1U << 31),
+
+        /// <summary>
         /// Mandatory script verification flags that all new blocks must comply with for
         /// them to be valid. (but old blocks may not comply with) Currently just P2SH,
         /// but in the future other flags may be added, such as a soft-fork to enforce
@@ -302,6 +307,7 @@ namespace NBitcoin
 
         OP_CHECKLOCKTIMEVERIFY = 0xb1,
         OP_CHECKSEQUENCEVERIFY = 0xb2,
+        OP_CHECKCOLDSTAKEVERIFY = 0xb9,
 
         // expansion
         OP_NOP1 = 0xb0,
@@ -313,13 +319,24 @@ namespace NBitcoin
         OP_NOP7 = 0xb6,
         OP_NOP8 = 0xb7,
         OP_NOP9 = 0xb8,
-        OP_NOP10 = 0xb9,
+        OP_NOP10 = 0xb9
     };
 
     public enum HashVersion
     {
         Original = 0,
         Witness = 1
+    }
+
+    public enum ScriptType
+    {
+        Witness,
+        P2PKH,
+        P2SH,
+        P2PK,
+        P2WPKH,
+        P2WSH,
+        MultiSig
     }
 
     public class ScriptSigs
@@ -363,13 +380,15 @@ namespace NBitcoin
 
         public Script(IEnumerable<Op> ops)
         {
-            var ms = new MemoryStream();
-            foreach(Op op in ops)
+            using (var ms = new MemoryStream())
             {
-                op.WriteTo(ms);
-            }
+                foreach (Op op in ops)
+                {
+                    op.WriteTo(ms);
+                }
 
-            this._Script = ms.ToArray();
+                this._Script = ms.ToArray();
+            }
         }
 
         public Script(string script)
@@ -379,13 +398,18 @@ namespace NBitcoin
 
         private static byte[] Parse(string script)
         {
-            var reader = new StringReader(script.Trim());
-            var result = new MemoryStream();
-            while(reader.Peek() != -1)
+            using (var reader = new StringReader(script.Trim()))
             {
-                Op.Read(reader).WriteTo(result);
+                using (var result = new MemoryStream())
+                {
+                    while (reader.Peek() != -1)
+                    {
+                        Op.Read(reader).WriteTo(result);
+                    }
+
+                    return result.ToArray();
+                }
             }
-            return result.ToArray();
         }
 
         public static Script FromBytesUnsafe(byte[] data)
@@ -393,11 +417,15 @@ namespace NBitcoin
             return new Script(data, true, true);
         }
 
+        public static Script FromHex(string hex)
+        {
+            return FromBytesUnsafe(Encoders.Hex.DecodeData(hex));
+        }
+
         public Script(byte[] data)
             : this((IEnumerable<byte>)data)
         {
         }
-
 
         private Script(byte[] data, bool @unsafe, bool unused)
         {
@@ -524,9 +552,10 @@ namespace NBitcoin
         /// <summary>
         /// True if the scriptPubKey is witness
         /// </summary>
+        [Obsolete("Use IsScriptType instead")]
         public bool IsWitness(Network network)
         {
-            return PayToWitTemplate.Instance.CheckScriptPubKey(network, this);
+            return PayToWitTemplate.Instance.CheckScriptPubKey(this);
         }
 
         public override string ToString()
@@ -665,9 +694,6 @@ namespace NBitcoin
                 return GetHash(sss);
             }
 
-
-
-
             if(nIn >= txTo.Inputs.Count)
             {
                 Utils.log("ERROR: SignatureHash() : nIn=" + nIn + " out of range\n");
@@ -675,7 +701,7 @@ namespace NBitcoin
             }
 
             SigHash hashType = nHashType & (SigHash)31;
-            
+
             // Check for invalid use of SIGHASH_SINGLE.
             if (hashType == SigHash.Single)
             {
@@ -689,7 +715,7 @@ namespace NBitcoin
             var scriptCopy = new Script(scriptCode._Script);
             scriptCopy.FindAndDelete(OpcodeType.OP_CODESEPARATOR);
 
-            Transaction txCopy = Transaction.Load(txTo.ToBytes(), network);
+            Transaction txCopy = network.CreateTransaction(txTo.ToBytes());
 
             //Set all TxIn script to empty string
             foreach(TxIn txin in txCopy.Inputs)
@@ -811,7 +837,7 @@ namespace NBitcoin
             return a == null ? new Script(ops) : new Script(a._Script.Concat(new Script(ops)._Script));
         }
 
-        public IEnumerable<Op> ToOps()
+        public IList<Op> ToOps()
         {
             using (var reader = new ScriptReader(this._Script))
             {
@@ -862,9 +888,11 @@ namespace NBitcoin
             return (BitcoinScriptAddress) this.Hash.GetAddress(network);
         }
 
+        [Obsolete("Use IsScriptType instead")]
         public bool IsPayToScriptHash(Network network)
         {
-            return PayToScriptHashTemplate.Instance.CheckScriptPubKey(network, this);
+            // TODO: Is the network needed?
+            return PayToScriptHashTemplate.Instance.CheckScriptPubKey(this);
         }
 
         public BitcoinWitScriptAddress GetWitScriptAddress(Network network)
@@ -874,6 +902,7 @@ namespace NBitcoin
 
         public uint GetSigOpCount(Network network, Script scriptSig)
         {
+            // TODO: Is the network needed?
             if(!IsPayToScriptHash(network))
                 return GetSigOpCount(true);
             // This is a pay-to-script-hash scriptPubKey;
@@ -886,7 +915,32 @@ namespace NBitcoin
 
         public ScriptTemplate FindTemplate(Network network)
         {
-            return StandardScripts.GetTemplateFromScriptPubKey(network, this);
+            return StandardScripts.GetTemplateFromScriptPubKey(this);
+        }
+
+        public bool IsScriptType(ScriptType type)
+        {
+            switch (type)
+            {
+                // TODO: The known types can be added to, e.g. cold staking. Need dynamic set.
+
+                case ScriptType.Witness:
+                    return PayToWitTemplate.Instance.CheckScriptPubKey(this);
+                case ScriptType.P2PKH:
+                    return PayToPubkeyHashTemplate.Instance.CheckScriptPubKey(this);
+                case ScriptType.P2SH:
+                    return PayToScriptHashTemplate.Instance.CheckScriptPubKey(this);
+                case ScriptType.P2PK:
+                    return PayToPubkeyTemplate.Instance.CheckScriptPubKey(this);
+                case ScriptType.P2WPKH:
+                    return PayToWitPubKeyHashTemplate.Instance.CheckScriptPubKey(this);
+                case ScriptType.P2WSH:
+                    return PayToWitScriptHashTemplate.Instance.CheckScriptPubKey(this);
+                case ScriptType.MultiSig:
+                    return PayToMultiSigTemplate.Instance.CheckScriptPubKey(this);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(type), type, "The value is not a valid script type");
+            }
         }
 
         /// <summary>
@@ -958,7 +1012,7 @@ namespace NBitcoin
             }
             else
             {
-                PayToMultiSigTemplateParameters multiSig = PayToMultiSigTemplate.Instance.ExtractScriptPubKeyParameters(network, this);
+                PayToMultiSigTemplateParameters multiSig = PayToMultiSigTemplate.Instance.ExtractScriptPubKeyParameters(this);
                 if(multiSig != null)
                 {
                     result.AddRange(multiSig.PubKeys);
@@ -1058,8 +1112,6 @@ namespace NBitcoin
             return result;
         }
 
-
-#if !NOCONSENSUSLIB
         public const string LibConsensusDll = "libbitcoinconsensus-0.dll";
         public enum BitcoinConsensusError
         {
@@ -1106,7 +1158,6 @@ namespace NBitcoin
             int valid = VerifyScriptConsensusWithAmount(scriptPubKeyBytes, (uint)scriptPubKeyBytes.Length, amount.Satoshi, txToBytes, (uint)txToBytes.Length, nIn, flags, ref err);
             return valid == 1;
         }
-#endif
 
         public bool IsUnspendable
         {
@@ -1209,12 +1260,12 @@ namespace NBitcoin
 
         private static Script CombineSignatures(Network network, Script scriptPubKey, TransactionChecker checker, byte[][] sigs1, byte[][] sigs2, HashVersion hashVersion)
         {
-            ScriptTemplate template = StandardScripts.GetTemplateFromScriptPubKey(network, scriptPubKey);
+            ScriptTemplate template = StandardScripts.GetTemplateFromScriptPubKey(scriptPubKey);
 
             if(template is PayToWitPubKeyHashTemplate)
             {
                 scriptPubKey = new KeyId(scriptPubKey.ToBytes(true).SafeSubarray(1, 20)).ScriptPubKey;
-                template = StandardScripts.GetTemplateFromScriptPubKey(network, scriptPubKey);
+                template = StandardScripts.GetTemplateFromScriptPubKey(scriptPubKey);
             }
             if(template == null || template is TxNullDataTemplate)
                 return PushAll(Max(sigs1, sigs2));
@@ -1273,7 +1324,7 @@ namespace NBitcoin
                 }
             }
 
-            PayToMultiSigTemplateParameters multiSigParams = PayToMultiSigTemplate.Instance.ExtractScriptPubKeyParameters(network, scriptPubKey);
+            PayToMultiSigTemplateParameters multiSigParams = PayToMultiSigTemplate.Instance.ExtractScriptPubKeyParameters(scriptPubKey);
             if(multiSigParams == null)
                 throw new InvalidOperationException("The scriptPubKey is not a valid multi sig");
 

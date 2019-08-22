@@ -14,6 +14,8 @@ namespace NBitcoin.Tests
             // parameterless constructor for a good reason so they should not fail this test.
             var exceptionalTypes = new List<Type>()
             {
+                typeof(BlockHeader),
+                typeof(ProvenBlockHeader),
                 typeof(ExtKey),
                 typeof(ExtPubKey),
                 typeof(PubKey),
@@ -24,7 +26,7 @@ namespace NBitcoin.Tests
             };
 
             IEnumerable<Type> types = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(x =>x.FullName.Contains("Stratis") || x.FullName.Contains("NBitcoin"))
+                .Where(x => x.FullName.Contains("Stratis") || x.FullName.Contains("NBitcoin"))
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(IBitcoinSerializable).IsAssignableFrom(p) && !p.IsInterface && p.IsClass);
 

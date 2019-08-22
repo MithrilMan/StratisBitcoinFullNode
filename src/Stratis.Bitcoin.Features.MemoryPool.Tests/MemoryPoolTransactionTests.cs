@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using NBitcoin;
 using Stratis.Bitcoin.Configuration;
-using Stratis.Bitcoin.Features.Consensus;
 using Stratis.Bitcoin.Features.MemoryPool.Fee;
+using Stratis.Bitcoin.Tests.Common;
 using Stratis.Bitcoin.Utilities;
 using Xunit;
 
@@ -46,6 +46,8 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
                 txGrandChild[i].AddOutput(new TxOut(new Money(11000L), new Script(OpcodeType.OP_11, OpcodeType.OP_EQUAL)));
             }
 
+            NodeSettings settings = NodeSettings.Default(KnownNetworks.TestNet);
+            var testPool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(new MempoolSettings(settings), settings.LoggerFactory, settings), settings.LoggerFactory, settings);
 
             var settings = NodeSettings.Default();
             TxMempool testPool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(settings.LoggerFactory, settings), settings.LoggerFactory, settings);
@@ -116,10 +118,8 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
         [Fact]
         public void MempoolIndexingTest()
         {
-
-            var settings = NodeSettings.Default();
-            var pool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(settings.LoggerFactory, settings), settings.LoggerFactory, settings);
-
+            NodeSettings settings = NodeSettings.Default(KnownNetworks.TestNet);
+            var pool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(new MempoolSettings(settings), settings.LoggerFactory, settings), settings.LoggerFactory, settings);
             var entry = new TestMemPoolEntryHelper();
 
             /* 3rd highest fee */
@@ -301,10 +301,8 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
         [Fact]
         public void MempoolAncestorIndexingTest()
         {
-
-            var settings = NodeSettings.Default();
-            var pool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(settings.LoggerFactory, settings), settings.LoggerFactory, settings);
-
+            NodeSettings settings = NodeSettings.Default(KnownNetworks.TestNet);
+            var pool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(new MempoolSettings(settings), settings.LoggerFactory, settings), settings.LoggerFactory, settings);
             var entry = new TestMemPoolEntryHelper();
 
             /* 3rd highest fee */
@@ -397,7 +395,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
         [Fact]
         public void MempoolSizeLimitTest()
         {
-            NodeSettings settings = NodeSettings.Default();
+            NodeSettings settings = NodeSettings.Default(KnownNetworks.TestNet);
             var dateTimeSet = new DateTimeProviderSet();
             var pool = new TxMempool(dateTimeSet, new BlockPolicyEstimator(settings.LoggerFactory, settings), settings.LoggerFactory, settings);
             var entry = new TestMemPoolEntryHelper();
@@ -533,10 +531,8 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
         [Fact]
         public void MempoolConcurrencyTest()
         {
-
-            var settings = NodeSettings.Default();
-            var pool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(settings.LoggerFactory, settings), settings.LoggerFactory, settings);
-
+            NodeSettings settings = NodeSettings.Default(KnownNetworks.TestNet);
+            var pool = new TxMempool(DateTimeProvider.Default, new BlockPolicyEstimator(new MempoolSettings(settings), settings.LoggerFactory, settings), settings.LoggerFactory, settings);
             var scheduler = new SchedulerLock();
             var rand = new Random();
 
@@ -554,7 +550,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
             var options = new ParallelOptions { MaxDegreeOfParallelism = 10 };
             Parallel.ForEach(txs, options, transaction =>
             {
-                var entry = new TxMempoolEntry(transaction, new Money(rand.Next(100)), 0, 0.0, 1, transaction.TotalOut, false, 4, new LockPoints(), new PowConsensusOptions());
+                var entry = new TxMempoolEntry(transaction, new Money(rand.Next(100)), 0, 0.0, 1, transaction.TotalOut, false, 4, new LockPoints(), new ConsensusOptions());
                 tasks.Add(scheduler.WriteAsync(() => pool.AddUnchecked(transaction.GetHash(), entry)));
             });
 
@@ -580,7 +576,7 @@ namespace Stratis.Bitcoin.Features.MemoryPool.Tests
             Money inChainValue = (pool != null && pool.HasNoInputsOf(tx)) ? tx.TotalOut : 0;
 
             return new TxMempoolEntry(tx, this.nFee, this.nTime, this.dPriority, this.nHeight,
-                inChainValue, this.spendsCoinbase, this.sigOpCost, this.lp, new PowConsensusOptions());
+                inChainValue, this.spendsCoinbase, this.sigOpCost, this.lp, new ConsensusOptions());
         }
 
         // Change the default value
